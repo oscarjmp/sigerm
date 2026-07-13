@@ -35,32 +35,33 @@ export default async function InventarioPage() {
 
       {/* Encabezado */}
 
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-5 mb-8">
 
-        <h1 className="text-4xl font-bold">
+        <h1 className="text-3xl md:text-4xl font-bold">
           Inventario
         </h1>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row gap-3">
 
           <NuevoArticuloModal />
 
           <a
             href="/reportes/inventario"
             target="_blank"
-className="
-bg-[#3483FA]
-hover:bg-[#2968C8]
-text-white
-font-medium
-px-6
-py-3
-rounded-xl
-shadow-md
-hover:shadow-lg
-transition-all
-duration-200
-"          >
+            className="
+              bg-[#3483FA]
+              hover:bg-[#2968C8]
+              text-white
+              font-medium
+              text-center
+              px-6
+              py-3
+              rounded-xl
+              shadow-md
+              hover:shadow-lg
+              transition-all
+            "
+          >
             Reporte Inventario
           </a>
 
@@ -70,51 +71,51 @@ duration-200
 
       {/* Tarjetas */}
 
-      <div className="grid grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 mb-8">
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-5">
 
-          <p className="text-gray-500">
+          <p className="text-gray-500 text-sm md:text-base">
             📦 Artículos
           </p>
 
-          <h2 className="text-4xl font-bold mt-3">
+          <h2 className="text-3xl md:text-4xl font-bold mt-3">
             {totalArticulos}
           </h2>
 
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-5">
 
-          <p className="text-gray-500">
+          <p className="text-gray-500 text-sm md:text-base">
             📂 Categorías
           </p>
 
-          <h2 className="text-4xl font-bold mt-3">
+          <h2 className="text-3xl md:text-4xl font-bold mt-3">
             {totalCategorias}
           </h2>
 
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-5">
 
-          <p className="text-gray-500">
+          <p className="text-gray-500 text-sm md:text-base">
             🧮 Existencias
           </p>
 
-          <h2 className="text-4xl font-bold mt-3">
+          <h2 className="text-3xl md:text-4xl font-bold mt-3">
             {totalExistencias}
           </h2>
 
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-5">
 
-          <p className="text-gray-500">
+          <p className="text-gray-500 text-sm md:text-base">
             ⚠ Estado Malo
           </p>
 
-          <h2 className="text-4xl font-bold mt-3 text-red-600">
+          <h2 className="text-3xl md:text-4xl font-bold mt-3 text-red-600">
             {articulosMalos}
           </h2>
 
@@ -124,9 +125,13 @@ duration-200
 
       {/* Tabla */}
 
-      <TablaInventario
-        articulos={articulos ?? []}
-      />
+      <div className="overflow-x-auto">
+
+        <TablaInventario
+          articulos={articulos ?? []}
+        />
+
+      </div>
 
     </MainLayout>
 

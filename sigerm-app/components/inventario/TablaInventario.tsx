@@ -90,8 +90,9 @@ const articulosAgrupados = articulosFiltrados.reduce(
       </div>
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="hidden md:block overflow-x-auto">
 
-        <table className="w-full">
+        <table className="min-w-[950px] w-full">
 
           <thead className="bg-slate-100">
 
@@ -119,11 +120,11 @@ const articulosAgrupados = articulosFiltrados.reduce(
 
         <td
           colSpan={7}
-          className="p-4 text-lg font-bold uppercase tracking-wide"
+          className="p-4 text-base md:text-lg font-bold uppercase tracking-wide"
         >
           📂 {categoria}
 
-          <span className="ml-3 text-sm font-normal text-gray-500">
+          <span className="ml-2 text-xs md:text-sm font-normal text-gray-500">
             {lista.length} artículos •{" "}
             {lista.reduce((suma, a) => suma + a.cantidad, 0)} existencias
           </span>
@@ -146,9 +147,9 @@ const articulosAgrupados = articulosFiltrados.reduce(
               <Image
                 src={articulo.imagen}
                 alt={articulo.nombre}
-                width={70}
-                height={70}
-                className="rounded-lg object-cover"
+                width={60}
+                height={60}
+                className="rounded-lg object-cover w-14 h-14 md:w-16 md:h-16"
               />
 
             ) : (
@@ -264,8 +265,9 @@ const articulosAgrupados = articulosFiltrados.reduce(
                   hover:bg-[#2968C8]
                   text-white
                   font-medium
-                  px-4
+                  px-3
                   py-2
+                  text-sm
                   rounded-xl
                   shadow-sm
                   transition-all
@@ -282,8 +284,9 @@ const articulosAgrupados = articulosFiltrados.reduce(
                   hover:bg-red-600
                   text-white
                   font-medium
-                  px-4
+                  px-3
                   py-2
+                  text-sm
                   rounded-xl
                   shadow-sm
                   transition-all
@@ -307,10 +310,121 @@ const articulosAgrupados = articulosFiltrados.reduce(
 
 </tbody>
 
-        </table>
+</table>
+
+</div>
+
+</div>
+<div className="md:hidden space-y-4 mt-6">
+
+  {Object.entries(articulosAgrupados).map(([categoria, lista]) => (
+
+    <div key={categoria}>
+
+      <div className="bg-slate-100 rounded-xl px-4 py-3 font-bold text-slate-700 mb-3">
+
+        📂 {categoria}
 
       </div>
 
+      {lista.map((articulo) => (
+
+        <div
+          key={articulo.id}
+          className="bg-white rounded-2xl shadow-md p-4 mb-4"
+        >
+
+          <div className="flex gap-4">
+
+            {articulo.imagen ? (
+
+              <Image
+                src={articulo.imagen}
+                alt={articulo.nombre}
+                width={90}
+                height={90}
+                className="rounded-xl object-cover"
+              />
+
+            ) : (
+
+              <div className="w-[90px] h-[90px] rounded-xl bg-gray-200 flex items-center justify-center">
+
+                Sin foto
+
+              </div>
+
+            )}
+
+            <div className="flex-1">
+
+              <h3 className="font-bold text-lg">
+
+                {articulo.nombre}
+
+              </h3>
+
+              <p className="text-sm text-gray-500">
+
+                Código: {articulo.codigo}
+
+              </p>
+
+              <p className="text-sm">
+
+                Categoría: {articulo.categoria}
+
+              </p>
+
+              <p className="text-sm">
+
+                Cantidad: <b>{articulo.cantidad}</b>
+
+              </p>
+
+              <p className="mt-2">
+
+                {articulo.estado === "Bueno" && "🟢 Bueno"}
+                {articulo.estado === "Regular" && "🟡 Regular"}
+                {articulo.estado === "Malo" && "🔴 Malo"}
+
+              </p>
+
+            </div>
+
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-5">
+
+            <Link
+              href={`/inventario/editar/${articulo.id}`}
+              className="bg-blue-500 text-white rounded-xl py-3 text-center font-medium"
+            >
+
+              Editar
+
+            </Link>
+
+            <button
+              onClick={() => eliminarArticulo(articulo.id)}
+              className="bg-red-500 text-white rounded-xl py-3 font-medium"
+            >
+
+              Eliminar
+
+            </button>
+
+          </div>
+
+        </div>
+
+      ))}
+
+    </div>
+
+  ))}
+
+</div>
     </>
 
   );
