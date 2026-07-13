@@ -1,37 +1,49 @@
+'use client';
+
+import { useState } from "react";
+
 import Sidebar from "./Sidebar";
+import Header from "./Header";
+import MobileSidebar from "./MobileSidebar";
 
 export default function MainLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+
+  const [menuAbierto, setMenuAbierto] = useState(false);
+
   return (
-    <div className="flex min-h-screen bg-slate-100">
 
-      <Sidebar />
+    <div className="min-h-screen bg-slate-100 flex">
 
-      <main className="flex-1">
+      {/* Sidebar escritorio */}
+      <div className="hidden md:block">
+        <Sidebar />
+      </div>
 
-        <header className="h-16 bg-white border-b flex items-center justify-between px-8 shadow-sm">
+      {/* Sidebar móvil */}
+      <MobileSidebar
+        abierto={menuAbierto}
+        cerrar={() => setMenuAbierto(false)}
+      />
 
-          <div>
-            <h2 className="text-2xl font-semibold">
-              SIGERM
-            </h2>
-          </div>
+      {/* Contenido */}
+      <main className="flex-1 min-w-0 flex flex-col">
 
-          <div className="text-gray-600">
-            Administrador
-          </div>
+        <Header
+          onMenuClick={() => setMenuAbierto(true)}
+        />
 
-        </header>
-
-        <section className="p-8">
+        <section className="flex-1 p-4 md:p-8 overflow-x-auto">
           {children}
         </section>
 
       </main>
 
     </div>
+
   );
+
 }

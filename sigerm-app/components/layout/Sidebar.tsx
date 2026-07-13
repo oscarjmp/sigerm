@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import {
   LayoutDashboard,
@@ -59,53 +60,99 @@ const menus = [
 ];
 
 export default function Sidebar() {
+
+  const pathname = usePathname();
+
   return (
-    <aside className="w-72 min-h-screen bg-slate-900 text-white flex flex-col shadow-xl">
 
-      {/* Encabezado */}
+    <aside className="w-72 min-h-screen bg-[#1E3A5F] text-white flex flex-col shadow-2xl">
 
-      <div className="p-6 border-b border-slate-700 flex flex-col items-center">
+      {/* Logo */}
+
+      <div className="p-8 border-b border-white/10 flex flex-col items-center bg-gradient-to-b from-[#24476F] to-[#1E3A5F]">
 
         <Image
           src="/logo.png"
           alt="SIGERM"
-          width={110}
-          height={110}
+          width={105}
+          height={105}
           priority
-          className="mb-4"
+          className="drop-shadow-xl"
         />
 
-        <h1 className="text-2xl font-bold tracking-wide">
+        <h1 className="mt-5 text-3xl font-bold tracking-wide">
           SIGERM
         </h1>
 
-        <p className="text-center text-xs text-slate-400 mt-2 leading-5">
-          Sistema Integral de Gestión para
+        <p className="mt-3 text-center text-sm text-blue-100 leading-6">
+          Sistema Integral de Gestión
           <br />
-          Encuentros de Renovación Matrimonial
+          para Encuentros de
+          <br />
+          Renovación Matrimonial
         </p>
 
       </div>
 
       {/* Menú */}
 
-      <nav className="flex-1 py-4">
+      <nav className="flex-1 px-4 py-6 space-y-2">
 
         {menus.map((item) => {
 
           const Icon = item.icon;
+
+          const activo =
+            pathname === item.href;
 
           return (
 
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-3 px-6 py-4 hover:bg-slate-800 transition-colors duration-200"
+              className={`
+                flex items-center
+                gap-4
+                px-4
+                py-3
+                rounded-xl
+                transition-all
+                duration-300
+
+                ${
+                  activo
+                    ? "bg-[#FFD54F] text-slate-900 shadow-lg"
+                    : "hover:bg-[#2C537E] text-white"
+                }
+              `}
             >
 
-              <Icon size={20} />
+              <div
+                className={`
+                  w-10
+                  h-10
+                  rounded-lg
+                  flex
+                  items-center
+                  justify-center
 
-              <span>{item.name}</span>
+                  ${
+                    activo
+                      ? "bg-white"
+                      : "bg-white/10"
+                  }
+                `}
+              >
+
+                <Icon size={20} />
+
+              </div>
+
+              <span className="font-medium">
+
+                {item.name}
+
+              </span>
 
             </Link>
 
@@ -117,18 +164,38 @@ export default function Sidebar() {
 
       {/* Pie */}
 
-      <div className="border-t border-slate-700 p-6">
+      <div className="border-t border-white/10 p-5">
 
-        <button className="flex items-center gap-3 text-red-300 hover:text-white transition">
+        <button
+          className="
+            w-full
+            flex
+            items-center
+            gap-3
+            rounded-xl
+            px-4
+            py-3
+            text-red-200
+            hover:bg-red-500
+            hover:text-white
+            transition-all
+          "
+        >
 
           <LogOut size={20} />
 
-          Cerrar sesión
+          <span>
+
+            Cerrar sesión
+
+          </span>
 
         </button>
 
       </div>
 
     </aside>
+
   );
+
 }
