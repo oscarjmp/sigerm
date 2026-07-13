@@ -10,9 +10,21 @@ export default function NuevoArticuloModal() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-lg font-semibold transition"
+        className="
+bg-[#3483FA]
+hover:bg-[#2968C8]
+text-white
+font-medium
+px-6
+py-3
+rounded-xl
+shadow-md
+hover:shadow-lg
+transition-all
+duration-200
+"
       >
-        ➕ Nuevo artículo
+        Nuevo artículo
       </button>
 
       {open && (

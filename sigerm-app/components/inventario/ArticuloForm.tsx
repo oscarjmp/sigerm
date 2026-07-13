@@ -16,22 +16,68 @@ type Articulo = {
 
 type Props = {
   articulo?: Articulo;
+  cerrar?: () => void;
 };
 
-export default function ArticuloForm({ articulo }: Props) {
+export default function ArticuloForm({
+  articulo,
+  cerrar,
+}: Props) {
 
   const router = useRouter();
 
   const [codigo, setCodigo] = useState(articulo?.codigo ?? "");
   const [nombre, setNombre] = useState(articulo?.nombre ?? "");
   const [categoria, setCategoria] = useState(articulo?.categoria ?? "");
+  async function obtenerCodigoAutomatico(categoriaSeleccionada: string) {
+
+  if (articulo) return;
+
+  if (!categoriaSeleccionada) {
+    setCodigo("");
+    return;
+  }
+
+  const { data, error } = await supabase.rpc(
+    "generar_codigo_articulo",
+    {
+      categoria: categoriaSeleccionada,
+    }
+  );
+
+  if (!error && data) {
+    setCodigo(data);
+  }
+
+}
   const [cantidad, setCantidad] = useState(articulo?.cantidad ?? 1);
   const [estado, setEstado] = useState(articulo?.estado ?? "Bueno");
 
   const [imagen, setImagen] = useState<File | null>(null);
-
+const [preview, setPreview] = useState<string>(
+  articulo?.imagen ?? ""
+);
   const [guardando, setGuardando] = useState(false);
+async function probarRPC() {
 
+  const { data, error } = await supabase.rpc(
+    "generar_codigo_articulo",
+    {
+      categoria: "Religiosos",
+    }
+  );
+
+  console.log("DATA:", data);
+  console.log("ERROR:", error);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert("Código generado: " + data);
+
+}
   async function guardarArticulo() {
 
     if (!codigo || !nombre) {
@@ -87,8 +133,8 @@ export default function ArticuloForm({ articulo }: Props) {
         .from("articulos")
         .insert({
           codigo,
-          nombre,
-          categoria,
+          nombre: nombre.toUpperCase(),
+          categoria:categoria.toUpperCase(),
           cantidad,
           estado,
           imagen: urlImagen,
@@ -103,17 +149,23 @@ export default function ArticuloForm({ articulo }: Props) {
       return;
     }
 
-    alert(
-      articulo
-        ? "Artículo actualizado correctamente."
-        : "Artículo registrado correctamente."
-    );
+alert(
+  articulo
+    ? "Artículo actualizado correctamente."
+    : "Artículo registrado correctamente."
+);
 
-    router.push("/inventario");
-    router.refresh();
+if (articulo) {
+  router.push("/inventario");
+  return;
+}
 
+if (cerrar) {
+  cerrar();
+}
+
+router.refresh();
   }
-
   return (
 
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -128,26 +180,50 @@ export default function ArticuloForm({ articulo }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
 
-        <input
-          placeholder="Código"
-          value={codigo}
-          onChange={(e)=>setCodigo(e.target.value)}
-          className="border rounded-lg p-3"
-        />
+       <input
+  type="text"
+  value={codigo}
+  readOnly
+  placeholder="Código automático"
+  className="border rounded-lg p-3 bg-gray-100 text-gray-700 cursor-not-allowed"
+/>
 
         <input
-          placeholder="Nombre"
-          value={nombre}
-          onChange={(e)=>setNombre(e.target.value)}
-          className="border rounded-lg p-3"
-        />
+  placeholder="Nombre"
+  value={nombre}
+  onChange={(e) => setNombre(e.target.value.toUpperCase())}
+  className="border rounded-lg p-3"
+/>
 
-        <input
-          placeholder="Categoría"
-          value={categoria}
-          onChange={(e)=>setCategoria(e.target.value)}
-          className="border rounded-lg p-3"
-        />
+<select
+  value={categoria}
+  onChange={async (e) => {
+
+    const valor = e.target.value;
+
+    setCategoria(valor);
+
+    await obtenerCodigoAutomatico(valor);
+
+  }}
+  className="border rounded-lg p-3"
+>
+
+  <option value="">Seleccione...</option>
+
+  <option>Religiosos</option>
+  <option>Alimentos</option>
+  <option>Papelería</option>
+  <option>Didácticos</option>
+  <option>Mobiliario</option>
+  <option>Electrónicos</option>
+  <option>Audio y Video</option>
+  <option>Decoración</option>
+  <option>Cocina</option>
+  <option>Limpieza</option>
+  <option>Otros</option>
+
+</select>
 
         <input
           type="number"
@@ -166,27 +242,94 @@ export default function ArticuloForm({ articulo }: Props) {
           <option>Malo</option>
         </select>
 
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e)=>
-            setImagen(
-              e.target.files
-                ? e.target.files[0]
-                : null
-            )
-          }
-          className="border rounded-lg p-3"
-        />
+       <label
+  className="
+    col-span-2
+    border-2
+    border-dashed
+    border-blue-300
+    rounded-xl
+    p-10
+    text-center
+    cursor-pointer
+    hover:border-blue-500
+    hover:bg-blue-50
+    transition
+  "
+>
+
+  <input
+    type="file"
+    accept="image/*"
+    hidden
+    onChange={(e) => {
+
+      const archivo = e.target.files?.[0];
+
+      if (!archivo) return;
+
+      setImagen(archivo);
+
+      setPreview(URL.createObjectURL(archivo));
+
+    }}
+  />
+
+  <div className="text-6xl">
+    📷
+  </div>
+
+  <p className="mt-4 font-semibold text-slate-700">
+    Arrastra una imagen aquí
+  </p>
+
+  <p className="text-gray-500">
+    o haz clic para seleccionarla
+  </p>
+
+</label>
+{preview && (
+
+  <div className="col-span-2 flex justify-center mt-4">
+
+   <img
+  src={preview}
+  alt="Vista previa"
+  className="
+      w-72
+      h-72
+      object-cover
+      rounded-2xl
+      shadow-xl
+      border-4
+      border-white
+"
+/>
+
+  </div>
+
+)}
 
       </div>
 
       <div className="flex gap-4 mt-6">
 
         <button
-          onClick={guardarArticulo}
+  onClick={guardarArticulo}
           disabled={guardando}
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg"
+         className="
+bg-[#3483FA]
+hover:bg-[#2968C8]
+text-white
+font-medium
+px-6
+py-3
+rounded-xl
+shadow-md
+hover:shadow-lg
+transition-all
+duration-200
+"
         >
           {guardando
             ? "Guardando..."
@@ -195,13 +338,31 @@ export default function ArticuloForm({ articulo }: Props) {
               : "Guardar artículo"}
         </button>
 
-        <button
-          type="button"
-          onClick={() => router.push("/inventario")}
-          className="bg-gray-300 px-6 py-3 rounded-lg"
-        >
-          Cancelar
-        </button>
+       <button
+  type="button"
+  onClick={() => {
+    if (cerrar) {
+      cerrar();
+    } else {
+      router.push("/inventario");
+    }
+  }}
+  className="
+bg-white
+border
+border-gray-300
+text-gray-700
+font-medium
+px-6
+py-3
+rounded-xl
+hover:bg-gray-100
+transition-all
+duration-200
+"
+>
+  Cancelar
+</button>
 
       </div>
 

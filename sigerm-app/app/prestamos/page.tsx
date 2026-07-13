@@ -16,38 +16,62 @@ export default async function PrestamosPage() {
     redirect("/login");
   }
 
-  // Inventario disponible
+  // Artículos disponibles
   const { data: articulos } = await supabase
     .from("articulos")
-    .select("id,nombre,cantidad")
+    .select(`
+      id,
+      codigo,
+      nombre,
+      categoria,
+      cantidad
+    `)
     .gt("cantidad", 0)
     .order("nombre");
 
   // Préstamos registrados
- const { data: prestamos } = await supabase
+const { data: prestamos } = await supabase
   .from("prestamos")
   .select(`
     id,
-    persona,
-    cantidad,
+    folio,
+    responsable,
+    solicitante,
+    fecha_prestamo,
+    fecha_devolucion,
     estado,
     observaciones,
-    articulo_id,
-    articulos!inner(
-      nombre,
-      cantidad
+    detalle_prestamo (
+      id,
+      cantidad,
+      articulos (
+        id,
+        codigo,
+        nombre
+      )
     )
-  `);
+  `)
+  .order("created_at", {
+    ascending: false,
+  });
 
   return (
 
     <MainLayout>
 
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex items-center justify-between mb-8">
 
-        <h1 className="text-3xl font-bold">
-          Préstamos de artículos
-        </h1>
+        <div>
+
+          <h1 className="text-4xl font-bold">
+            Préstamos
+          </h1>
+
+          <p className="text-gray-500 mt-2">
+            Administración de préstamos de artículos
+          </p>
+
+        </div>
 
       </div>
 
@@ -55,9 +79,13 @@ export default async function PrestamosPage() {
         articulos={articulos ?? []}
       />
 
-     <TablaPrestamos
+      <div className="mt-10">
+
+   <TablaPrestamos
   prestamos={(prestamos ?? []) as any}
 />
+
+      </div>
 
     </MainLayout>
 

@@ -1,5 +1,5 @@
 'use client';
-
+import React from "react";
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,7 +37,22 @@ export default function TablaInventario({ articulos }: Props) {
     );
 
   });
+const articulosAgrupados = articulosFiltrados.reduce(
+  (grupos, articulo) => {
 
+    const categoria = articulo.categoria || "SIN CATEGORÍA";
+
+    if (!grupos[categoria]) {
+      grupos[categoria] = [];
+    }
+
+    grupos[categoria].push(articulo);
+
+    return grupos;
+
+  },
+  {} as Record<string, Articulo[]>
+);
   async function eliminarArticulo(id: string) {
 
     if (!confirm("¿Desea eliminar este artículo?")) return;
@@ -94,96 +109,203 @@ export default function TablaInventario({ articulos }: Props) {
 
           </thead>
 
-          <tbody>
+<tbody>
 
-            {articulosFiltrados.map((articulo)=>(
+  {Object.entries(articulosAgrupados).map(([categoria, lista]) => (
 
-              <tr
-                key={articulo.id}
-                className="border-t hover:bg-slate-50"
+    <React.Fragment key={categoria}>
+
+      <tr className="bg-gray-100 text-slate-700 border-b border-gray-300">
+
+        <td
+          colSpan={7}
+          className="p-4 text-lg font-bold uppercase tracking-wide"
+        >
+          📂 {categoria}
+
+          <span className="ml-3 text-sm font-normal text-gray-500">
+            {lista.length} artículos •{" "}
+            {lista.reduce((suma, a) => suma + a.cantidad, 0)} existencias
+          </span>
+
+        </td>
+
+      </tr>
+
+      {lista.map((articulo) => (
+
+        <tr
+          key={articulo.id}
+          className="border-t hover:bg-slate-50 transition-colors"
+        >
+
+          <td className="p-4">
+
+            {articulo.imagen ? (
+
+              <Image
+                src={articulo.imagen}
+                alt={articulo.nombre}
+                width={70}
+                height={70}
+                className="rounded-lg object-cover"
+              />
+
+            ) : (
+
+              <div className="w-[70px] h-[70px] bg-gray-200 rounded-lg flex items-center justify-center text-gray-500">
+                Sin foto
+              </div>
+
+            )}
+
+          </td>
+
+          <td className="font-medium">
+            {articulo.codigo}
+          </td>
+
+          <td className="font-medium">
+            {articulo.nombre}
+          </td>
+
+          <td>
+            {articulo.categoria}
+          </td>
+
+          <td className="text-center font-semibold">
+            {articulo.cantidad}
+          </td>
+
+          <td className="text-center">
+
+            {articulo.estado === "Bueno" && (
+
+              <span
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  bg-emerald-50
+                  text-emerald-700
+                  border
+                  border-emerald-100
+                  px-3
+                  py-1
+                  rounded-full
+                  text-sm
+                  font-medium
+                "
               >
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                Bueno
+              </span>
 
-                <td className="p-4">
+            )}
 
-                  {articulo.imagen ? (
+            {articulo.estado === "Regular" && (
 
-                    <Image
-                      src={articulo.imagen}
-                      alt={articulo.nombre}
-                      width={70}
-                      height={70}
-                      className="rounded-lg object-cover"
-                    />
+              <span
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  bg-amber-50
+                  text-amber-700
+                  border
+                  border-amber-100
+                  px-3
+                  py-1
+                  rounded-full
+                  text-sm
+                  font-medium
+                "
+              >
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                Regular
+              </span>
 
-                  ) : (
+            )}
 
-                    <div className="w-[70px] h-[70px] bg-gray-200 rounded-lg flex items-center justify-center text-gray-500">
+            {articulo.estado === "Malo" && (
 
-                      Sin foto
+              <span
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  bg-rose-50
+                  text-rose-700
+                  border
+                  border-rose-100
+                  px-3
+                  py-1
+                  rounded-full
+                  text-sm
+                  font-medium
+                "
+              >
+                <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
+                Malo
+              </span>
 
-                    </div>
+            )}
 
-                  )}
+          </td>
 
-                </td>
+          <td>
 
-                <td>{articulo.codigo}</td>
+            <div className="flex justify-center gap-2">
 
-                <td>{articulo.nombre}</td>
+              <Link
+                href={`/inventario/editar/${articulo.id}`}
+                className="
+                  bg-[#3483FA]
+                  hover:bg-[#2968C8]
+                  text-white
+                  font-medium
+                  px-4
+                  py-2
+                  rounded-xl
+                  shadow-sm
+                  transition-all
+                  duration-200
+                "
+              >
+                Editar
+              </Link>
 
-                <td>{articulo.categoria}</td>
+              <button
+                onClick={() => eliminarArticulo(articulo.id)}
+                className="
+                  bg-red-500
+                  hover:bg-red-600
+                  text-white
+                  font-medium
+                  px-4
+                  py-2
+                  rounded-xl
+                  shadow-sm
+                  transition-all
+                  duration-200
+                "
+              >
+                Eliminar
+              </button>
 
-                <td>{articulo.cantidad}</td>
+            </div>
 
-                <td>
+          </td>
 
-                  {articulo.estado==="Bueno" && (
-                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full">
-                      🟢 Bueno
-                    </span>
-                  )}
+        </tr>
 
-                  {articulo.estado==="Regular" && (
-                    <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full">
-                      🟡 Regular
-                    </span>
-                  )}
+      ))}
 
-                  {articulo.estado==="Malo" && (
-                    <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full">
-                      🔴 Malo
-                    </span>
-                  )}
+    </React.Fragment>
 
-                </td>
+  ))}
 
-                <td>
-
-                  <div className="flex justify-center gap-2">
-
-                    <Link
-                      href={`/inventario/editar/${articulo.id}`}
-                      className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
-                    >
-                      Editar
-                    </Link>
-
-                    <button
-                      onClick={()=>eliminarArticulo(articulo.id)}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-                    >
-                      Eliminar
-                    </button>
-
-                  </div>
-
-                </td>
-
-              </tr>
-
-            ))}
-
-          </tbody>
+</tbody>
 
         </table>
 
