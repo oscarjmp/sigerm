@@ -128,3 +128,40 @@
     @apply font-sans;
   }
 }
+/* ===========================================
+   ESTILOS DE IMPRESIÓN
+=========================================== */
+
+@media print {
+
+  body {
+    font-size: 11pt !important;
+    color: #000;
+    background: #fff;
+  }
+
+  h1 {
+    font-size: 24pt !important;
+  }
+
+  h2 {
+    font-size: 18pt !important;
+  }
+
+  h3 {
+    font-size: 12pt !important;
+  }
+
+  p,
+  td,
+  span,
+  div {
+    font-size: 11pt !important;
+  }
+
+  th {
+    font-size: 12pt !important;
+    font-weight: bold !important;
+  }
+
+}
