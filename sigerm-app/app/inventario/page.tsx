@@ -1,111 +1,124 @@
-import ArticuloForm from "@/components/inventario/ArticuloForm";
 import TablaInventario from "@/components/inventario/TablaInventario";
+import NuevoArticuloModal from "@/components/inventario/NuevoArticuloModal";
 import MainLayout from "@/components/layout/MainLayout";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InventarioPage() {
+
   const supabase = await createClient();
 
   const { data: articulos } = await supabase
     .from("articulos")
     .select("*")
     .order("nombre");
-const totalArticulos = articulos?.length ?? 0;
 
-const totalCategorias = new Set(
-  articulos?.map((a) => a.categoria)
-).size;
+  const totalArticulos = articulos?.length ?? 0;
 
-const totalExistencias =
-  articulos?.reduce(
-    (suma, a) => suma + a.cantidad,
-    0
-  ) ?? 0;
+  const totalCategorias = new Set(
+    articulos?.map((a) => a.categoria)
+  ).size;
 
-const articulosMalos =
-  articulos?.filter(
-    (a) => a.estado === "Malo"
-  ).length ?? 0;
+  const totalExistencias =
+    articulos?.reduce(
+      (suma, articulo) => suma + articulo.cantidad,
+      0
+    ) ?? 0;
+
+  const articulosMalos =
+    articulos?.filter(
+      (a) => a.estado === "Malo"
+    ).length ?? 0;
 
   return (
+
     <MainLayout>
+
+      {/* Encabezado */}
+
       <div className="flex justify-between items-center mb-8">
-        <div className="flex justify-between items-center mb-8">
 
-  <h1 className="text-3xl font-bold">
+        <h1 className="text-4xl font-bold">
+          Inventario
+        </h1>
 
-    Inventario
+        <div className="flex gap-4">
 
-  </h1>
+          <NuevoArticuloModal />
 
-  <a
-    href="/reportes/inventario"
-    target="_blank"
-    className="bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-lg"
-  >
+          <a
+            href="/reportes/inventario"
+            target="_blank"
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg shadow-lg"
+          >
+            📄 Reporte Inventario
+          </a>
 
-    📄 Reporte Inventario
+        </div>
 
-  </a>
-
-</div>
       </div>
 
-      {/*<ArticuloForm />*/}
-<div className="grid grid-cols-4 gap-6 mb-8">
+      {/* Tarjetas */}
 
-  <div className="bg-white rounded-xl shadow p-6">
+      <div className="grid grid-cols-4 gap-6 mb-8">
 
-    <p className="text-gray-500">
-      📦 Artículos
-    </p>
+        <div className="bg-white rounded-xl shadow-lg p-6">
 
-    <h2 className="text-4xl font-bold mt-2">
-      {totalArticulos}
-    </h2>
+          <p className="text-gray-500">
+            📦 Artículos
+          </p>
 
-  </div>
+          <h2 className="text-4xl font-bold mt-3">
+            {totalArticulos}
+          </h2>
 
-  <div className="bg-white rounded-xl shadow p-6">
+        </div>
 
-    <p className="text-gray-500">
-      📂 Categorías
-    </p>
+        <div className="bg-white rounded-xl shadow-lg p-6">
 
-    <h2 className="text-4xl font-bold mt-2">
-      {totalCategorias}
-    </h2>
+          <p className="text-gray-500">
+            📂 Categorías
+          </p>
 
-  </div>
+          <h2 className="text-4xl font-bold mt-3">
+            {totalCategorias}
+          </h2>
 
-  <div className="bg-white rounded-xl shadow p-6">
+        </div>
 
-    <p className="text-gray-500">
-      🧮 Existencias
-    </p>
+        <div className="bg-white rounded-xl shadow-lg p-6">
 
-    <h2 className="text-4xl font-bold mt-2">
-      {totalExistencias}
-    </h2>
+          <p className="text-gray-500">
+            🧮 Existencias
+          </p>
 
-  </div>
+          <h2 className="text-4xl font-bold mt-3">
+            {totalExistencias}
+          </h2>
 
-  <div className="bg-white rounded-xl shadow p-6">
+        </div>
 
-    <p className="text-gray-500">
-      ⚠ Estado Malo
-    </p>
+        <div className="bg-white rounded-xl shadow-lg p-6">
 
-    <h2 className="text-4xl font-bold text-red-600 mt-2">
-      {articulosMalos}
-    </h2>
+          <p className="text-gray-500">
+            ⚠ Estado Malo
+          </p>
 
-  </div>
+          <h2 className="text-4xl font-bold mt-3 text-red-600">
+            {articulosMalos}
+          </h2>
 
-</div>
+        </div>
+
+      </div>
+
+      {/* Tabla */}
+
       <TablaInventario
         articulos={articulos ?? []}
       />
+
     </MainLayout>
+
   );
+
 }
