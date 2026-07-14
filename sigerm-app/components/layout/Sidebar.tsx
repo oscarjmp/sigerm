@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
 
 import {
   LayoutDashboard,
@@ -62,6 +63,21 @@ const menus = [
 export default function Sidebar() {
 
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function cerrarSesion() {
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    router.push("/login");
+    router.refresh();
+
+  }
 
   return (
 
@@ -102,8 +118,7 @@ export default function Sidebar() {
 
           const Icon = item.icon;
 
-          const activo =
-            pathname === item.href;
+          const activo = pathname === item.href;
 
           return (
 
@@ -149,9 +164,7 @@ export default function Sidebar() {
               </div>
 
               <span className="font-medium">
-
                 {item.name}
-
               </span>
 
             </Link>
@@ -167,27 +180,75 @@ export default function Sidebar() {
       <div className="border-t border-white/10 p-5">
 
         <button
+          onClick={cerrarSesion}
           className="
+            group
             w-full
             flex
             items-center
-            gap-3
-            rounded-xl
+            justify-between
             px-4
             py-3
-            text-red-200
-            hover:bg-red-500
-            hover:text-white
+            rounded-2xl
             transition-all
+            duration-300
+            hover:bg-red-500/15
+            hover:shadow-lg
           "
         >
 
-          <LogOut size={20} />
+          <div className="flex items-center gap-4">
 
-          <span>
+            <div
+              className="
+                w-11
+                h-11
+                rounded-xl
+                bg-red-500/15
+                flex
+                items-center
+                justify-center
+                transition-all
+                duration-300
+                group-hover:bg-red-500
+              "
+            >
 
-            Cerrar sesión
+              <LogOut
+                size={20}
+                className="
+                  text-red-300
+                  group-hover:text-white
+                  transition-all
+                "
+              />
 
+            </div>
+
+            <span
+              className="
+                font-semibold
+                text-red-200
+                group-hover:text-white
+                transition-all
+              "
+            >
+              Cerrar sesión
+            </span>
+
+          </div>
+
+          <span
+            className="
+              text-red-300
+              opacity-0
+              translate-x-2
+              group-hover:opacity-100
+              group-hover:translate-x-0
+              transition-all
+            "
+          >
+            →
           </span>
 
         </button>
