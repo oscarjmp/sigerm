@@ -63,18 +63,58 @@ const { data: prestamos } = await supabase
 
         <div>
 
-          <h1 className="text-4xl font-bold">
-            Préstamos
-          </h1>
+<h1 className="text-4xl font-bold text-slate-800">
+  Movimientos de Inventario
+</h1>
 
-          <p className="text-gray-500 mt-2">
-            Administración de préstamos de artículos
-          </p>
+<p className="text-gray-500 mt-2">
+  Registro y control de préstamos y salidas de artículos.
+</p>
 
         </div>
 
       </div>
+<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
 
+  <div className="bg-white rounded-2xl shadow p-5">
+
+    <p className="text-sm text-gray-500">
+      Artículos disponibles
+    </p>
+
+    <p className="text-3xl font-bold text-[#3483FA]">
+      {articulos?.length ?? 0}
+    </p>
+
+  </div>
+<div className="bg-white rounded-2xl shadow p-5">
+
+  <p className="text-sm text-gray-500">
+    Préstamos registrados
+  </p>
+
+  <p className="text-3xl font-bold text-emerald-600">
+    {prestamos?.length ?? 0}
+  </p>
+
+</div>
+
+<div className="bg-white rounded-2xl shadow p-5">
+
+  <p className="text-sm text-gray-500">
+    Préstamos pendientes
+  </p>
+
+  <p className="text-3xl font-bold text-amber-600">
+    {
+      prestamos?.filter(
+        (p) => p.estado === "PRESTADO"
+      ).length ?? 0
+    }
+  </p>
+
+</div>
+</div>
       <PrestamoForm
         articulos={articulos ?? []}
       />

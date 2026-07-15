@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -10,7 +11,8 @@ const roboto = Roboto({
 
 export const metadata: Metadata = {
   title: "SIGERM",
-  description: "Sistema Integral de Gestión para Encuentros de Renovación Matrimonial",
+  description:
+    "Sistema Integral de Gestión para Encuentros de Renovación Matrimonial",
 };
 
 export default function RootLayout({
@@ -24,6 +26,14 @@ export default function RootLayout({
         className={`${roboto.className} min-h-screen bg-slate-100`}
       >
         {children}
+
+        <Toaster
+          position="top-right"
+          richColors
+          expand
+          closeButton
+          duration={3000}
+        />
       </body>
     </html>
   );

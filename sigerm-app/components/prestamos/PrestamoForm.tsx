@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-
+import { obtenerMatrimonios } from "@/lib/services/matrimonios";
 type Articulo = {
   id: string;
   codigo: string;
@@ -19,6 +19,14 @@ type ArticuloPrestamo = {
   cantidad: number;
 };
 
+type Matrimonio = {
+  id: string;
+  esposo: string;
+  esposa: string;
+  telefono: string | null;
+  email: string | null;
+  ministerio: string;
+};
 type Props = {
   articulos: Articulo[];
 };
@@ -32,7 +40,14 @@ export default function PrestamoForm({ articulos }: Props) {
   //==============================
 
   const [folio, setFolio] = useState("");
+const [matrimonios, setMatrimonios] =
+  useState<Matrimonio[]>([]);
 
+const [matrimonioId, setMatrimonioId] =
+  useState("");
+
+const [ministerio, setMinisterio] =
+  useState("");
   const [responsable, setResponsable] = useState("");
 
   const [solicitante, setSolicitante] = useState("");
@@ -77,9 +92,11 @@ export default function PrestamoForm({ articulos }: Props) {
 
   useEffect(() => {
 
-    obtenerFolio();
+  obtenerFolio();
 
-  }, []);
+  cargarMatrimonios();
+
+}, []);
 
   async function obtenerFolio() {
 
@@ -94,6 +111,18 @@ export default function PrestamoForm({ articulos }: Props) {
     }
 
   }
+  async function cargarMatrimonios() {
+
+  const { data } =
+    await obtenerMatrimonios();
+
+  if (data) {
+
+    setMatrimonios(data);
+
+  }
+
+}
   //==============================
   // AGREGAR ARTÍCULO AL PRÉSTAMO
   //==============================
@@ -208,10 +237,13 @@ async function guardarPrestamo() {
     return;
   }
 
-  if (!solicitante) {
-    alert("Capture el solicitante.");
-    return;
-  }
+ if (!matrimonioId) {
+
+  alert("Seleccione un matrimonio.");
+
+  return;
+
+}
 
   if (detalle.length === 0) {
     alert("Agregue al menos un artículo.");
@@ -228,6 +260,7 @@ async function guardarPrestamo() {
     .from("prestamos")
     .insert({
       folio,
+      matrimonio_id: matrimonioId,
       responsable: responsable.toUpperCase(),
       solicitante: solicitante.toUpperCase(),
       telefono,
@@ -331,6 +364,9 @@ if (errorDetalle) {
 
   setResponsable("");
   setSolicitante("");
+  setMatrimonioId("");
+
+setMinisterio("");
   setTelefono("");
   setCorreo("");
   setEvento("");
@@ -382,42 +418,116 @@ if (errorDetalle) {
 
       <div className="grid grid-cols-2 gap-5">
 
-        <input
-          placeholder="Responsable"
-          value={responsable}
-          onChange={(e) =>
-            setResponsable(e.target.value.toUpperCase())
-          }
-          className="border rounded-xl p-3"
-        />
+     <input
+  placeholder="Responsable que entrega el material"
+  value={responsable}
+  onChange={(e) =>
+    setResponsable(e.target.value.toUpperCase())
+  }
+  className="border rounded-xl p-3 bg-gray-50"
+  autoComplete="off"
+/>
 
-        <input
-          placeholder="Solicitante"
-          value={solicitante}
-          onChange={(e) =>
-            setSolicitante(e.target.value.toUpperCase())
-          }
-          className="border rounded-xl p-3"
-        />
+<select
+  value={matrimonioId}
+  onChange={(e) => {
 
-        <input
-          placeholder="Teléfono"
-          value={telefono}
-          onChange={(e) =>
-            setTelefono(e.target.value)
-          }
-          className="border rounded-xl p-3"
-        />
+    const id = e.target.value;
 
-        <input
-          placeholder="Correo"
-          value={correo}
-          onChange={(e) =>
-            setCorreo(e.target.value)
-          }
-          className="border rounded-xl p-3"
-        />
+    setMatrimonioId(id);
 
+    const matrimonio = matrimonios.find(
+      (m) => m.id === id
+    );
+
+    if (!matrimonio) return;
+
+    setSolicitante(
+      `${matrimonio.esposo} y ${matrimonio.esposa}`
+    );
+
+    setTelefono(
+      matrimonio.telefono ?? ""
+    );
+
+    setCorreo(
+      matrimonio.email ?? ""
+    );
+
+    setMinisterio(
+      matrimonio.ministerio
+    );
+
+  }}
+  className="border rounded-xl p-3"
+>
+
+  <option value="">
+    Seleccione un matrimonio...
+  </option>
+
+  {matrimonios.map((m) => (
+
+    <option
+      key={m.id}
+      value={m.id}
+    >
+
+      {m.esposo} y {m.esposa}
+
+    </option>
+
+  ))}
+
+</select>
+
+<div className="col-span-2 bg-slate-50 border rounded-2xl p-5">
+
+  <h3 className="font-semibold text-slate-700 mb-4">
+    Información del matrimonio
+  </h3>
+
+  <div className="grid md:grid-cols-3 gap-4">
+
+    <div>
+
+      <p className="text-xs text-gray-500">
+        📞 Teléfono
+      </p>
+
+      <p className="font-medium text-slate-800">
+        {telefono || "Sin teléfono"}
+      </p>
+
+    </div>
+
+    <div>
+
+      <p className="text-xs text-gray-500">
+        ✉ Correo
+      </p>
+
+      <p className="font-medium text-slate-800 break-all">
+        {correo || "Sin correo"}
+      </p>
+
+    </div>
+
+    <div>
+
+      <p className="text-xs text-gray-500">
+        ❤️ Ministerio
+      </p>
+
+      <p className="font-medium text-slate-800">
+        {ministerio || "Sin ministerio"}
+      </p>
+
+    </div>
+
+  </div>
+
+</div>
         <select
           value={tipoEvento}
           onChange={(e) =>
@@ -439,17 +549,17 @@ if (errorDetalle) {
           <option>RETIRO</option>
 
           <option>OTRO</option>
-
+<option>SALIDA LIBRE</option>
         </select>
 
-        <input
-          placeholder="Evento"
-          value={evento}
-          onChange={(e) =>
-            setEvento(e.target.value.toUpperCase())
-          }
-          className="border rounded-xl p-3"
-        />
+      <input
+  placeholder="Motivo del préstamo"
+  value={evento}
+  onChange={(e) =>
+    setEvento(e.target.value.toUpperCase())
+  }
+  className="border rounded-xl p-3"
+/>
 
         <input
           placeholder="Lugar"
@@ -460,14 +570,18 @@ if (errorDetalle) {
           className="border rounded-xl p-3"
         />
 
-        <input
-          type="date"
-          value={fechaDevolucion}
-          onChange={(e) =>
-            setFechaDevolucion(e.target.value)
-          }
-          className="border rounded-xl p-3"
-        />
+      {tipoEvento !== "SALIDA LIBRE" && (
+
+  <input
+    type="date"
+    value={fechaDevolucion}
+    onChange={(e) =>
+      setFechaDevolucion(e.target.value)
+    }
+    className="border rounded-xl p-3"
+  />
+
+)}
 
         <textarea
           placeholder="Observaciones"
@@ -507,7 +621,9 @@ if (errorDetalle) {
               Seleccione un artículo...
             </option>
 
-            {articulos.map((articulo) => (
+            {articulos
+  .filter((articulo) => articulo.cantidad > 0)
+  .map((articulo) => (
 
               <option
                 key={articulo.id}
@@ -556,7 +672,7 @@ if (errorDetalle) {
               transition
             "
           >
-            + Agregar artículo
+            Agregar al préstamo
           </button>
 
         </div>
@@ -601,7 +717,7 @@ if (errorDetalle) {
                   className="text-center p-8 text-gray-400"
                 >
 
-                  No hay artículos agregados.
+                  Seleccione un artículo, indique la cantidad y presione "Agregar al préstamo".
 
                 </td>
 
@@ -691,9 +807,11 @@ if (errorDetalle) {
             onClick={() => {
 
               setResponsable("");
+              setMatrimonioId("");
               setSolicitante("");
               setTelefono("");
               setCorreo("");
+              setMinisterio("");
               setTipoEvento("");
               setEvento("");
               setLugar("");

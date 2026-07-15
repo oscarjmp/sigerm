@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+
+import { supabase } from "@/lib/supabase/client";
+import { notificar } from "@/lib/notificaciones";
 
 type Articulo = {
   id: string;
@@ -26,73 +28,92 @@ export default function ArticuloForm({
 
   const router = useRouter();
 
-  const [codigo, setCodigo] = useState(articulo?.codigo ?? "");
-  const [nombre, setNombre] = useState(articulo?.nombre ?? "");
-  const [categoria, setCategoria] = useState(articulo?.categoria ?? "");
-  async function obtenerCodigoAutomatico(categoriaSeleccionada: string) {
-
-  if (articulo) return;
-
-  if (!categoriaSeleccionada) {
-    setCodigo("");
-    return;
-  }
-
-  const { data, error } = await supabase.rpc(
-    "generar_codigo_articulo",
-    {
-      categoria: categoriaSeleccionada,
-    }
+  const [codigo, setCodigo] = useState(
+    articulo?.codigo ?? ""
   );
 
-  if (!error && data) {
-    setCodigo(data);
-  }
-
-}
-  const [cantidad, setCantidad] = useState(articulo?.cantidad ?? 1);
-  const [estado, setEstado] = useState(articulo?.estado ?? "Bueno");
-
-  const [imagen, setImagen] = useState<File | null>(null);
-const [preview, setPreview] = useState<string>(
-  articulo?.imagen ?? ""
-);
-  const [guardando, setGuardando] = useState(false);
-async function probarRPC() {
-
-  const { data, error } = await supabase.rpc(
-    "generar_codigo_articulo",
-    {
-      categoria: "Religiosos",
-    }
+  const [nombre, setNombre] = useState(
+    articulo?.nombre ?? ""
   );
 
-  console.log("DATA:", data);
-  console.log("ERROR:", error);
+  const [categoria, setCategoria] = useState(
+    articulo?.categoria ?? ""
+  );
 
-  if (error) {
-    alert(error.message);
-    return;
+  const [cantidad, setCantidad] = useState(
+    articulo?.cantidad ?? 1
+  );
+
+  const [estado, setEstado] = useState(
+    articulo?.estado ?? "Bueno"
+  );
+
+  const [imagen, setImagen] =
+    useState<File | null>(null);
+
+  const [preview, setPreview] =
+    useState<string>(articulo?.imagen ?? "");
+
+  const [guardando, setGuardando] =
+    useState(false);
+
+  async function obtenerCodigoAutomatico(
+    categoriaSeleccionada: string
+  ) {
+
+    if (articulo) return;
+
+    if (!categoriaSeleccionada) {
+
+      setCodigo("");
+
+      return;
+
+    }
+
+    const { data, error } =
+      await supabase.rpc(
+        "generar_codigo_articulo",
+        {
+          categoria: categoriaSeleccionada,
+        }
+      );
+
+    if (error) {
+
+      notificar.error(error.message);
+
+      return;
+
+    }
+
+    if (data) {
+
+      setCodigo(data);
+
+    }
+
   }
 
-  alert("Código generado: " + data);
-
-}
   async function guardarArticulo() {
 
     if (!codigo || !nombre) {
-      alert("Código y nombre son obligatorios.");
+
+      notificar.advertencia(
+        "Código y nombre son obligatorios."
+      );
+
       return;
+
     }
 
     setGuardando(true);
 
     let urlImagen = articulo?.imagen ?? "";
-
-    if (imagen) {
+        if (imagen) {
 
       const nombreArchivo =
-        Date.now() + "-" + imagen.name;
+        `${Date.now()}-${imagen.name}`;
 
       const { error: uploadError } =
         await supabase.storage
@@ -100,15 +121,20 @@ async function probarRPC() {
           .upload(nombreArchivo, imagen);
 
       if (uploadError) {
-        alert(uploadError.message);
+
+        notificar.error(uploadError.message);
+
         setGuardando(false);
+
         return;
+
       }
 
       urlImagen = supabase.storage
         .from("articulos")
         .getPublicUrl(nombreArchivo)
         .data.publicUrl;
+
     }
 
     let error;
@@ -118,12 +144,19 @@ async function probarRPC() {
       ({ error } = await supabase
         .from("articulos")
         .update({
+
           codigo,
-          nombre,
-          categoria,
+
+          nombre: nombre.toUpperCase(),
+
+          categoria: categoria.toUpperCase(),
+
           cantidad,
+
           estado,
+
           imagen: urlImagen,
+
         })
         .eq("id", articulo.id));
 
@@ -132,12 +165,19 @@ async function probarRPC() {
       ({ error } = await supabase
         .from("articulos")
         .insert({
+
           codigo,
+
           nombre: nombre.toUpperCase(),
-          categoria:categoria.toUpperCase(),
+
+          categoria: categoria.toUpperCase(),
+
           cantidad,
+
           estado,
+
           imagen: urlImagen,
+
         }));
 
     }
@@ -145,27 +185,35 @@ async function probarRPC() {
     setGuardando(false);
 
     if (error) {
-      alert(error.message);
+
+      notificar.error(error.message);
+
       return;
+
     }
 
-alert(
-  articulo
-    ? "Artículo actualizado correctamente."
-    : "Artículo registrado correctamente."
-);
+    notificar.exito(
 
-if (articulo) {
-  router.push("/inventario");
-  return;
-}
+      articulo
+        ? "Artículo actualizado correctamente."
+        : "Artículo registrado correctamente."
 
-if (cerrar) {
-  cerrar();
-}
+    );
 
-router.refresh();
+    if (articulo) {
+
+      router.push("/inventario");
+
+      return;
+
+    }
+
+    cerrar?.();
+
+    router.refresh();
+
   }
+
   return (
 
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -180,156 +228,199 @@ router.refresh();
 
       <div className="grid grid-cols-2 gap-4">
 
-       <input
-  type="text"
-  value={codigo}
-  readOnly
-  placeholder="Código automático"
-  className="border rounded-lg p-3 bg-gray-100 text-gray-700 cursor-not-allowed"
-/>
+        <input
+          type="text"
+          value={codigo}
+          readOnly
+          placeholder="Código automático"
+          className="
+            border
+            rounded-lg
+            p-3
+            bg-gray-100
+            text-gray-700
+            cursor-not-allowed
+          "
+        />
 
         <input
-  placeholder="Nombre"
-  value={nombre}
-  onChange={(e) => setNombre(e.target.value.toUpperCase())}
-  className="border rounded-lg p-3"
-/>
+          placeholder="Nombre"
+          value={nombre}
+          onChange={(e) =>
+            setNombre(
+              e.target.value.toUpperCase()
+            )
+          }
+          className="
+            border
+            rounded-lg
+            p-3
+          "
+        />
 
-<select
-  value={categoria}
-  onChange={async (e) => {
+        <select
+          value={categoria}
+          onChange={async (e) => {
 
-    const valor = e.target.value;
+            const valor = e.target.value;
 
-    setCategoria(valor);
+            setCategoria(valor);
 
-    await obtenerCodigoAutomatico(valor);
+            await obtenerCodigoAutomatico(valor);
 
-  }}
-  className="border rounded-lg p-3"
->
+          }}
+          className="
+            border
+            rounded-lg
+            p-3
+          "
+        >
+          <option value="">
+            Seleccione...
+          </option>
 
-  <option value="">Seleccione...</option>
+          <option>Religiosos</option>
+          <option>Alimentos</option>
+          <option>Papelería</option>
+          <option>Didácticos</option>
+          <option>Mobiliario</option>
+          <option>Electrónicos</option>
+          <option>Audio y Video</option>
+          <option>Decoración</option>
+          <option>Cocina</option>
+          <option>Limpieza</option>
+          <option>Otros</option>
 
-  <option>Religiosos</option>
-  <option>Alimentos</option>
-  <option>Papelería</option>
-  <option>Didácticos</option>
-  <option>Mobiliario</option>
-  <option>Electrónicos</option>
-  <option>Audio y Video</option>
-  <option>Decoración</option>
-  <option>Cocina</option>
-  <option>Limpieza</option>
-  <option>Otros</option>
-
-</select>
-
-        <input
+        </select>
+                <input
           type="number"
           value={cantidad}
-          onChange={(e)=>setCantidad(Number(e.target.value))}
-          className="border rounded-lg p-3"
+          min={1}
+          onChange={(e) =>
+            setCantidad(Number(e.target.value))
+          }
+          className="
+            border
+            rounded-lg
+            p-3
+          "
         />
 
         <select
           value={estado}
-          onChange={(e)=>setEstado(e.target.value)}
-          className="border rounded-lg p-3"
+          onChange={(e) =>
+            setEstado(e.target.value)
+          }
+          className="
+            border
+            rounded-lg
+            p-3
+          "
         >
           <option>Bueno</option>
           <option>Regular</option>
           <option>Malo</option>
         </select>
 
-       <label
-  className="
-    col-span-2
-    border-2
-    border-dashed
-    border-blue-300
-    rounded-xl
-    p-10
-    text-center
-    cursor-pointer
-    hover:border-blue-500
-    hover:bg-blue-50
-    transition
-  "
->
+        <label
+          className="
+            col-span-2
+            border-2
+            border-dashed
+            border-blue-300
+            rounded-xl
+            p-10
+            text-center
+            cursor-pointer
+            hover:border-blue-500
+            hover:bg-blue-50
+            transition
+          "
+        >
 
-  <input
-    type="file"
-    accept="image/*"
-    hidden
-    onChange={(e) => {
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
 
-      const archivo = e.target.files?.[0];
+              const archivo =
+                e.target.files?.[0];
 
-      if (!archivo) return;
+              if (!archivo) return;
 
-      setImagen(archivo);
+              setImagen(archivo);
 
-      setPreview(URL.createObjectURL(archivo));
+              setPreview(
+                URL.createObjectURL(archivo)
+              );
 
-    }}
-  />
+            }}
+          />
 
-  <div className="text-6xl">
-    📷
-  </div>
+          <div className="text-6xl">
 
-  <p className="mt-4 font-semibold text-slate-700">
-    Arrastra una imagen aquí
-  </p>
+            📷
 
-  <p className="text-gray-500">
-    o haz clic para seleccionarla
-  </p>
+          </div>
 
-</label>
-{preview && (
+          <p className="mt-4 font-semibold text-slate-700">
 
-  <div className="col-span-2 flex justify-center mt-4">
+            Arrastra una imagen aquí
 
-   <img
-  src={preview}
-  alt="Vista previa"
-  className="
-      w-72
-      h-72
-      object-cover
-      rounded-2xl
-      shadow-xl
-      border-4
-      border-white
-"
-/>
+          </p>
 
-  </div>
+          <p className="text-gray-500">
 
-)}
+            o haz clic para seleccionarla
+
+          </p>
+
+        </label>
+
+        {preview && (
+
+          <div className="col-span-2 flex justify-center mt-4">
+
+            <img
+              src={preview}
+              alt="Vista previa"
+              className="
+                w-72
+                h-72
+                object-cover
+                rounded-2xl
+                shadow-xl
+                border-4
+                border-white
+              "
+            />
+
+          </div>
+
+        )}
 
       </div>
-
-      <div className="flex gap-4 mt-6">
+            <div className="flex gap-4 mt-6">
 
         <button
-  onClick={guardarArticulo}
+          type="button"
+          onClick={guardarArticulo}
           disabled={guardando}
-         className="
-bg-[#3483FA]
-hover:bg-[#2968C8]
-text-white
-font-medium
-px-6
-py-3
-rounded-xl
-shadow-md
-hover:shadow-lg
-transition-all
-duration-200
-"
+          className="
+            bg-[#3483FA]
+            hover:bg-[#2968C8]
+            disabled:bg-blue-300
+            text-white
+            font-medium
+            px-6
+            py-3
+            rounded-xl
+            shadow-md
+            hover:shadow-lg
+            transition-all
+            duration-200
+          "
         >
           {guardando
             ? "Guardando..."
@@ -338,31 +429,39 @@ duration-200
               : "Guardar artículo"}
         </button>
 
-       <button
-  type="button"
-  onClick={() => {
-    if (cerrar) {
-      cerrar();
-    } else {
-      router.push("/inventario");
-    }
-  }}
-  className="
-bg-white
-border
-border-gray-300
-text-gray-700
-font-medium
-px-6
-py-3
-rounded-xl
-hover:bg-gray-100
-transition-all
-duration-200
-"
->
-  Cancelar
-</button>
+        <button
+          type="button"
+          onClick={() => {
+
+            if (guardando) return;
+
+            if (cerrar) {
+
+              cerrar();
+
+            } else {
+
+              router.push("/inventario");
+
+            }
+
+          }}
+          className="
+            bg-white
+            border
+            border-gray-300
+            text-gray-700
+            font-medium
+            px-6
+            py-3
+            rounded-xl
+            hover:bg-gray-100
+            transition-all
+            duration-200
+          "
+        >
+          Cancelar
+        </button>
 
       </div>
 
