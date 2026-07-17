@@ -6,6 +6,7 @@ export interface Matrimonio {
   email: string | null;
   direccion: string | null;
   ministerio: string | null;
+  foto: string | null;
   activo: boolean;
   created_at: string;
 }

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
-
+import Image from "next/image";
+import { supabase } from "@/lib/supabase/client";
+import { subirImagen } from "@/lib/storage/imagenes";
 import { notificar } from "@/lib/notificaciones";
 
 import {
@@ -69,6 +71,11 @@ export default function MatrimonioForm({
   const [guardando, setGuardando] =
     useState(false);
 
+    const [foto, setFoto] = useState<File | null>(null);
+
+const [preview, setPreview] = useState(
+  matrimonio?.foto ?? ""
+);
   async function cargarMinisterios() {
 
     const { data } =
@@ -87,7 +94,19 @@ export default function MatrimonioForm({
     cargarMinisterios();
 
   }, []);
+function seleccionarFoto(
+  e: ChangeEvent<HTMLInputElement>
+) {
 
+  const archivo = e.target.files?.[0];
+
+  if (!archivo) return;
+
+  setFoto(archivo);
+
+  setPreview(URL.createObjectURL(archivo));
+
+}
   async function guardar() {
 
     if (!esposo.trim()) {
@@ -120,28 +139,56 @@ export default function MatrimonioForm({
 
     }
 
-    setGuardando(true);
+setGuardando(true);
 
-    let error;
+let error;
 
-    const datos = {
+let fotoUrl = matrimonio?.foto ?? null;
 
-      esposo: esposo.toUpperCase(),
+if (foto) {
 
-      esposa: esposa.toUpperCase(),
+  try {
 
-      telefono,
+    fotoUrl = await subirImagen(
+      "matrimonios",
+      foto
+    );
 
-      email,
+  } catch (e: any) {
 
-      direccion,
+  console.error(e);
 
-      ministerio,
+  notificar.error(
+    e.message ?? "No fue posible subir la fotografía."
+  );
 
-      activo: true,
+  setGuardando(false);
 
-    };
+  return;
 
+}
+
+}
+
+const datos = {
+
+  esposo: esposo.toUpperCase(),
+
+  esposa: esposa.toUpperCase(),
+
+  telefono,
+
+  email,
+
+  direccion,
+
+  ministerio,
+
+  foto: fotoUrl,
+
+  activo: true,
+
+};
     if (matrimonio) {
 
       ({ error } =
@@ -195,7 +242,62 @@ export default function MatrimonioForm({
     }}
     className="space-y-6"
   >
+{/* Fotografía */}
 
+<div className="flex flex-col items-center gap-4">
+
+  <label className="text-lg font-semibold text-slate-700">
+    Fotografía del matrimonio
+  </label>
+
+  <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-slate-200 bg-slate-100 flex items-center justify-center">
+
+    {preview ? (
+
+      <Image
+        src={preview}
+        alt="Fotografía"
+        width={160}
+        height={160}
+        className="w-full h-full object-cover"
+      />
+
+    ) : (
+
+      <div className="text-5xl">
+        👥
+      </div>
+
+    )}
+
+  </div>
+
+  <label
+    htmlFor="foto"
+    className="
+      cursor-pointer
+      bg-[#3483FA]
+      hover:bg-[#2968C8]
+      text-white
+      px-5
+      py-2
+      rounded-xl
+      shadow
+      transition-all
+    "
+  >
+    📷 Seleccionar fotografía
+  </label>
+
+  <input
+    id="foto"
+    type="file"
+    accept="image/*"
+    onChange={seleccionarFoto}
+    className="hidden"
+  />
+
+</div>
     {/* Primera fila */}
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

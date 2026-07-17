@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -243,24 +244,32 @@ export default function TablaMatrimonios({
                         <div className="flex items-center gap-3">
 
                           <div
-                            className="
-                              w-10
-                              h-10
-                              rounded-full
-                              bg-amber-100
-                              flex
-                              items-center
-                              justify-center
-                              text-slate-700
-                              font-medium
-                              shrink-0
-                            "
-                          >
-
-                            {matrimonio.esposo.charAt(0)}
-                            {matrimonio.esposa.charAt(0)}
-
-                          </div>
+  className="
+    w-12
+    h-12
+    rounded-full
+    overflow-hidden
+    bg-amber-100
+    shrink-0
+    border
+    border-slate-200
+  "
+>
+  {matrimonio.foto ? (
+    <Image
+      src={matrimonio.foto}
+      alt={`${matrimonio.esposo} y ${matrimonio.esposa}`}
+      width={48}
+      height={48}
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    <div className="w-full h-full flex items-center justify-center font-semibold text-slate-700">
+      {matrimonio.esposo.charAt(0)}
+      {matrimonio.esposa.charAt(0)}
+    </div>
+  )}
+</div>
 
                           <span className="text-[15px] font-normal text-slate-800">
 
@@ -452,24 +461,33 @@ export default function TablaMatrimonios({
 
                 <div className="flex gap-4">
 
-                  <div
-                    className="
-                      w-14
-                      h-14
-                      rounded-full
-                      bg-amber-100
-                      flex
-                      items-center
-                      justify-center
-                      text-slate-700
-                      font-semibold
-                    "
-                  >
-
-                    {matrimonio.esposo.charAt(0)}
-                    {matrimonio.esposa.charAt(0)}
-
-                  </div>
+                <div
+  className="
+    w-14
+    h-14
+    rounded-full
+    overflow-hidden
+    border
+    border-slate-200
+    bg-amber-100
+    shrink-0
+  "
+>
+  {matrimonio.foto ? (
+    <Image
+      src={matrimonio.foto}
+      alt={`${matrimonio.esposo} y ${matrimonio.esposa}`}
+      width={56}
+      height={56}
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    <div className="w-full h-full flex items-center justify-center font-semibold text-slate-700">
+      {matrimonio.esposo.charAt(0)}
+      {matrimonio.esposa.charAt(0)}
+    </div>
+  )}
+</div>
 
                   <div className="flex-1">
 
