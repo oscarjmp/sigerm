@@ -1,41 +1,68 @@
-import { ROLES, type NombreRol } from "@/lib/constants/roles";
-import { PERMISOS, type Permiso } from "@/lib/permissions/permissions";
+import {
+  ROLES,
+  type NombreRol,
+} from "@/lib/constants/roles";
 
-export const PERMISOS_POR_ROL: Record<NombreRol, Permiso[]> = {
+import {
+  PERMISOS,
+  type Permiso,
+} from "@/lib/permissions/permissions";
+
+export const PERMISOS_POR_ROL: Record<
+  NombreRol,
+  readonly Permiso[]
+> = {
   [ROLES.ADMINISTRADOR]: Object.values(PERMISOS),
 
   [ROLES.COORDINADOR]: [
     PERMISOS.VER_DASHBOARD,
+
     PERMISOS.VER_INVENTARIO,
+
     PERMISOS.VER_PRESTAMOS,
     PERMISOS.CREAR_PRESTAMO,
     PERMISOS.EDITAR_PRESTAMO,
     PERMISOS.REGISTRAR_DEVOLUCION,
+
+    PERMISOS.VER_ENCUENTROS,
+    PERMISOS.CREAR_ENCUENTRO,
+    PERMISOS.EDITAR_ENCUENTRO,
+
     PERMISOS.VER_MATRIMONIOS,
     PERMISOS.CREAR_MATRIMONIO,
     PERMISOS.EDITAR_MATRIMONIO,
+
+    PERMISOS.VER_SERVIDORES,
+    PERMISOS.CREAR_SERVIDOR,
+    PERMISOS.EDITAR_SERVIDOR,
+
     PERMISOS.VER_REPORTES,
   ],
 
   [ROLES.INVENTARIO]: [
     PERMISOS.VER_DASHBOARD,
+
     PERMISOS.VER_INVENTARIO,
     PERMISOS.CREAR_ARTICULO,
     PERMISOS.EDITAR_ARTICULO,
     PERMISOS.DESACTIVAR_ARTICULO,
+
     PERMISOS.VER_PRESTAMOS,
     PERMISOS.CREAR_PRESTAMO,
     PERMISOS.EDITAR_PRESTAMO,
     PERMISOS.REGISTRAR_DEVOLUCION,
-    PERMISOS.VER_REPORTES,
   ],
 
   [ROLES.SECRETARIA]: [
     PERMISOS.VER_DASHBOARD,
+
+    PERMISOS.VER_ENCUENTROS,
+
     PERMISOS.VER_MATRIMONIOS,
     PERMISOS.CREAR_MATRIMONIO,
     PERMISOS.EDITAR_MATRIMONIO,
-    PERMISOS.VER_PRESTAMOS,
+
+    PERMISOS.VER_SERVIDORES,
   ],
 
   [ROLES.TESORERIA]: [
@@ -48,7 +75,12 @@ export function tienePermiso(
   rol: NombreRol | null | undefined,
   permiso: Permiso,
 ): boolean {
-  if (!rol) return false;
+  if (!rol) {
+    return false;
+  }
 
-  return PERMISOS_POR_ROL[rol]?.includes(permiso) ?? false;
+  return (
+    PERMISOS_POR_ROL[rol]?.includes(permiso) ??
+    false
+  );
 }

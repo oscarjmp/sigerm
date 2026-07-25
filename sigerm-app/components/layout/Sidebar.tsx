@@ -1,5 +1,6 @@
 "use client";
 
+import type { ComponentType } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -17,12 +18,20 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/lib/hooks/useAuth";
-import { PERMISOS, type Permiso } from "@/lib/permissions/permissions";
+import {
+  PERMISOS,
+  type Permiso,
+} from "@/lib/permissions/permissions";
+
+type IconoMenu = ComponentType<{
+  size?: number;
+  className?: string;
+}>;
 
 type MenuItem = {
   name: string;
   href: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: IconoMenu;
   permiso: Permiso;
 };
 
@@ -65,7 +74,7 @@ const menus: MenuItem[] = [
   },
   {
     name: "Reportes",
-    href: "/reportes",
+    href: "/reportes/inventario",
     icon: ClipboardList,
     permiso: PERMISOS.VER_REPORTES,
   },
@@ -85,11 +94,18 @@ const menus: MenuItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { puede, cargando, cerrarSesion } = useAuth();
 
-  const menusPermitidos = cargando
-    ? []
-    : menus.filter((item) => puede(item.permiso));
+  const {
+    puede,
+    cargando,
+    estaAutenticado,
+    cerrarSesion,
+  } = useAuth();
+
+  const menusPermitidos =
+    !cargando && estaAutenticado
+      ? menus.filter((item) => puede(item.permiso))
+      : [];
 
   async function manejarCierreSesion() {
     try {
@@ -100,16 +116,16 @@ export default function Sidebar() {
           ? error.message
           : "No fue posible cerrar la sesión.";
 
-      alert(mensaje);
+      window.alert(mensaje);
     }
   }
 
   return (
-    <aside className="flex min-h-screen w-72 flex-col bg-[#1E3A5F] text-white shadow-2xl">
+    <aside className="flex min-h-screen w-72 shrink-0 flex-col bg-[#1E3A5F] text-white shadow-2xl">
       <div className="flex flex-col items-center border-b border-white/10 bg-gradient-to-b from-[#24476F] to-[#1E3A5F] p-8">
         <Image
           src="/logo.png"
-          alt="SIGERM"
+          alt="Logotipo de SIGERM"
           width={105}
           height={105}
           priority
@@ -129,7 +145,10 @@ export default function Sidebar() {
         </p>
       </div>
 
-      <nav className="flex-1 space-y-2 px-4 py-6">
+      <nav
+        aria-label="Menú principal"
+        className="flex-1 space-y-2 overflow-y-auto px-4 py-6"
+      >
         {cargando && (
           <div className="px-4 py-3 text-sm text-blue-100">
             Cargando menú...
@@ -137,60 +156,74 @@ export default function Sidebar() {
         )}
 
         {!cargando &&
-          menusPermitidos.map((item) => {
-            const Icon = item.icon;
+          estaAutenticado &&
+          menusPermitidos.length === 0 && (
+            <div className="rounded-xl bg-white/10 px-4 py-3 text-sm text-blue-100">
+              No tiene módulos asignados.
+            </div>
+          )}
 
-            const activo =
-              pathname === item.href ||
-              pathname.startsWith(`${item.href}/`);
+        {menusPermitidos.map((item) => {
+          const Icon = item.icon;
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={activo ? "page" : undefined}
+          const activo =
+            pathname === item.href ||
+            pathname.startsWith(`${item.href}/`);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={activo ? "page" : undefined}
+              className={`
+                flex items-center gap-4 rounded-xl px-4 py-3
+                transition-all duration-300
+                ${
+                  activo
+                    ? "bg-[#FFD54F] text-slate-900 shadow-lg"
+                    : "text-white hover:bg-[#2C537E]"
+                }
+              `}
+            >
+              <div
                 className={`
-                  flex items-center gap-4 rounded-xl px-4 py-3
-                  transition-all duration-300
+                  flex h-10 w-10 shrink-0 items-center justify-center
+                  rounded-lg transition-colors
                   ${
                     activo
-                      ? "bg-[#FFD54F] text-slate-900 shadow-lg"
-                      : "text-white hover:bg-[#2C537E]"
+                      ? "bg-white"
+                      : "bg-white/10"
                   }
                 `}
               >
-                <div
-                  className={`
-                    flex h-10 w-10 items-center justify-center rounded-lg
-                    ${activo ? "bg-white" : "bg-white/10"}
-                  `}
-                >
-                  <Icon size={20} />
-                </div>
+                <Icon size={20} />
+              </div>
 
-                <span className="font-medium">
-                  {item.name}
-                </span>
-              </Link>
-            );
-          })}
+              <span className="font-medium">
+                {item.name}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="border-t border-white/10 p-5">
         <button
           type="button"
           onClick={manejarCierreSesion}
+          disabled={cargando}
           className="
             group flex w-full items-center justify-between
             rounded-2xl px-4 py-3
             transition-all duration-300
             hover:bg-red-500/15 hover:shadow-lg
+            disabled:cursor-not-allowed disabled:opacity-60
           "
         >
           <div className="flex items-center gap-4">
             <div
               className="
-                flex h-11 w-11 items-center justify-center
+                flex h-11 w-11 shrink-0 items-center justify-center
                 rounded-xl bg-red-500/15
                 transition-all duration-300
                 group-hover:bg-red-500
@@ -218,6 +251,7 @@ export default function Sidebar() {
           </div>
 
           <span
+            aria-hidden="true"
             className="
               translate-x-2 text-red-300 opacity-0
               transition-all

@@ -1,45 +1,78 @@
-'use client';
+"use client";
 
 import { Menu } from "lucide-react";
+
+import { useAuth } from "@/lib/hooks/useAuth";
 
 type Props = {
   onMenuClick: () => void;
 };
 
+function construirNombreCompleto(
+  nombre?: string | null,
+  apellidoPaterno?: string | null,
+  apellidoMaterno?: string | null,
+): string {
+  return [
+    nombre,
+    apellidoPaterno,
+    apellidoMaterno,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export default function Header({
   onMenuClick,
 }: Props) {
+  const {
+    usuario,
+    rol,
+    cargando,
+  } = useAuth();
+
+  const nombreCompleto = usuario
+    ? construirNombreCompleto(
+        usuario.nombre,
+        usuario.apellido_paterno,
+        usuario.apellido_materno,
+      )
+    : "";
+
   return (
-
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-8 shadow-sm">
-
+    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 shadow-sm md:px-8">
       <div className="flex items-center gap-4">
-
         <button
+          type="button"
           onClick={onMenuClick}
-          className="md:hidden p-2 rounded-lg hover:bg-gray-100"
+          className="rounded-lg p-2 transition hover:bg-gray-100 md:hidden"
+          aria-label="Abrir menú"
         >
           <Menu size={24} />
         </button>
 
-        <div>
-
-          <h1 className="text-2xl font-bold text-slate-800">
-            SIGERM
-          </h1>
-
-        </div>
-
+        <h1 className="text-2xl font-bold text-slate-800">
+          SIGERM
+        </h1>
       </div>
 
-      <div className="hidden md:block text-gray-600 font-medium">
+      <div className="hidden text-right md:block">
+        {cargando ? (
+          <p className="text-sm font-medium text-slate-400">
+            Cargando usuario...
+          </p>
+        ) : (
+          <>
+            <p className="font-semibold text-slate-800">
+              {nombreCompleto || "Usuario"}
+            </p>
 
-        Administrador
-
+            <p className="text-sm text-slate-500">
+              {rol ?? "Sin rol"}
+            </p>
+          </>
+        )}
       </div>
-
     </header>
-
   );
-
 }

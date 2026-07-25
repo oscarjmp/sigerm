@@ -11,16 +11,24 @@ export const PERMISOS = {
   EDITAR_PRESTAMO: "editar_prestamo",
   REGISTRAR_DEVOLUCION: "registrar_devolucion",
 
+  VER_ENCUENTROS: "ver_encuentros",
+  CREAR_ENCUENTRO: "crear_encuentro",
+  EDITAR_ENCUENTRO: "editar_encuentro",
+
   VER_MATRIMONIOS: "ver_matrimonios",
   CREAR_MATRIMONIO: "crear_matrimonio",
   EDITAR_MATRIMONIO: "editar_matrimonio",
 
-  VER_ENCUENTROS: "ver_encuentros",
   VER_SERVIDORES: "ver_servidores",
+  CREAR_SERVIDOR: "crear_servidor",
+  EDITAR_SERVIDOR: "editar_servidor",
 
   VER_REPORTES: "ver_reportes",
+
   ADMINISTRAR_USUARIOS: "administrar_usuarios",
-  ADMINISTRAR_CONFIGURACION: "administrar_configuracion",
+  ADMINISTRAR_CONFIGURACION:
+    "administrar_configuracion",
 } as const;
 
-export type Permiso = (typeof PERMISOS)[keyof typeof PERMISOS];
+export type Permiso =
+  (typeof PERMISOS)[keyof typeof PERMISOS];

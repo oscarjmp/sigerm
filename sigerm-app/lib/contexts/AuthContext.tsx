@@ -10,15 +10,12 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 
-import { supabase } from "@/lib/supabase/client";
-import { crearUsuarioRepository } from "@/lib/repositories/usuario.repository";
-import type { UsuarioConRol } from "@/lib/types/usuario";
-import {
-  TODOS_LOS_ROLES,
-  type NombreRol,
-} from "@/lib/constants/roles";
+import { TODOS_LOS_ROLES, type NombreRol } from "@/lib/constants/roles";
 import { tienePermiso } from "@/lib/permissions/menuPermissions";
 import type { Permiso } from "@/lib/permissions/permissions";
+import { crearUsuarioRepository } from "@/lib/repositories/usuario.repository";
+import { supabase } from "@/lib/supabase/client";
+import type { UsuarioConRol } from "@/lib/types/usuario";
 
 type AuthContextValue = {
   authUser: User | null;
@@ -26,14 +23,16 @@ type AuthContextValue = {
   rol: NombreRol | null;
   cargando: boolean;
   estaAutenticado: boolean;
+  cuentaActiva: boolean;
+  tienePerfil: boolean;
   puede: (permiso: Permiso) => boolean;
   recargarUsuario: () => Promise<void>;
   cerrarSesion: () => Promise<void>;
 };
 
-export const AuthContext = createContext<AuthContextValue | undefined>(
-  undefined,
-);
+export const AuthContext = createContext<
+  AuthContextValue | undefined
+>(undefined);
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -54,9 +53,15 @@ function obtenerNombreRol(
   return null;
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [authUser, setAuthUser] = useState<User | null>(null);
-  const [usuario, setUsuario] = useState<UsuarioConRol | null>(null);
+export function AuthProvider({
+  children,
+}: AuthProviderProps) {
+  const [authUser, setAuthUser] =
+    useState<User | null>(null);
+
+  const [usuario, setUsuario] =
+    useState<UsuarioConRol | null>(null);
+
   const [cargando, setCargando] = useState(true);
 
   const usuarioRepository = useMemo(
@@ -64,41 +69,81 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [],
   );
 
+  const limpiarAutenticacion = useCallback(() => {
+    setAuthUser(null);
+    setUsuario(null);
+  }, []);
+
   const cargarPerfil = useCallback(
     async (user: User | null) => {
-      setAuthUser(user);
-
       if (!user) {
-        setUsuario(null);
+        limpiarAutenticacion();
         return;
       }
 
-      const perfil = await usuarioRepository.obtenerPorAuthId(
-        user.id,
-      );
+      setAuthUser(user);
+
+      const perfil =
+        await usuarioRepository.obtenerPorAuthId(
+          user.id,
+        );
+
+      if (!perfil) {
+        console.error(
+          "El usuario autenticado no tiene un perfil registrado en public.usuarios.",
+        );
+
+        limpiarAutenticacion();
+
+        await supabase.auth.signOut();
+
+        return;
+      }
+
+      if (!perfil.activo) {
+        console.warn(
+          "Se bloqueó el acceso porque la cuenta está inactiva.",
+        );
+
+        limpiarAutenticacion();
+
+        await supabase.auth.signOut();
+
+        return;
+      }
 
       setUsuario(perfil);
     },
-    [usuarioRepository],
+    [
+      limpiarAutenticacion,
+      usuarioRepository,
+    ],
   );
 
-  const recargarUsuario = useCallback(async () => {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+  const recargarUsuario =
+    useCallback(async () => {
+      setCargando(true);
 
-    if (error) {
-      throw new Error(
-        `No fue posible obtener la sesión: ${error.message}`,
-      );
-    }
+      try {
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
 
-    await cargarPerfil(user);
-  }, [cargarPerfil]);
+        if (error) {
+          throw new Error(
+            `No fue posible obtener la sesión: ${error.message}`,
+          );
+        }
+
+        await cargarPerfil(user);
+      } finally {
+        setCargando(false);
+      }
+    }, [cargarPerfil]);
 
   useEffect(() => {
-    let activo = true;
+    let montado = true;
 
     async function iniciarAutenticacion() {
       try {
@@ -111,7 +156,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           throw error;
         }
 
-        if (activo) {
+        if (montado) {
           await cargarPerfil(user);
         }
       } catch (error) {
@@ -120,12 +165,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           error,
         );
 
-        if (activo) {
-          setAuthUser(null);
-          setUsuario(null);
+        if (montado) {
+          limpiarAutenticacion();
         }
       } finally {
-        if (activo) {
+        if (montado) {
           setCargando(false);
         }
       }
@@ -137,39 +181,79 @@ export function AuthProvider({ children }: AuthProviderProps) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        void cargarPerfil(session?.user ?? null).finally(() => {
-          setCargando(false);
+        setCargando(true);
+
+        void cargarPerfil(
+          session?.user ?? null,
+        ).finally(() => {
+          if (montado) {
+            setCargando(false);
+          }
         });
       },
     );
 
     return () => {
-      activo = false;
+      montado = false;
       subscription.unsubscribe();
     };
-  }, [cargarPerfil]);
+  }, [
+    cargarPerfil,
+    limpiarAutenticacion,
+  ]);
 
-  const rol = obtenerNombreRol(usuario);
-
-  const puede = useCallback(
-    (permiso: Permiso) => tienePermiso(rol, permiso),
-    [rol],
+  const rol = useMemo(
+    () => obtenerNombreRol(usuario),
+    [usuario],
   );
 
-  const cerrarSesion = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
+  const tienePerfil = Boolean(usuario);
 
-    if (error) {
-      throw new Error(
-        `No fue posible cerrar la sesión: ${error.message}`,
-      );
-    }
+  const cuentaActiva = Boolean(
+    usuario?.activo,
+  );
 
-    setAuthUser(null);
-    setUsuario(null);
+  const estaAutenticado = Boolean(
+    authUser &&
+      usuario &&
+      usuario.activo &&
+      rol,
+  );
 
-    window.location.href = "/login";
-  }, []);
+  const puede = useCallback(
+    (permiso: Permiso): boolean => {
+      if (
+        cargando ||
+        !estaAutenticado ||
+        !rol
+      ) {
+        return false;
+      }
+
+      return tienePermiso(rol, permiso);
+    },
+    [
+      cargando,
+      estaAutenticado,
+      rol,
+    ],
+  );
+
+  const cerrarSesion =
+    useCallback(async () => {
+      const { error } =
+        await supabase.auth.signOut();
+
+      if (error) {
+        throw new Error(
+          `No fue posible cerrar la sesión: ${error.message}`,
+        );
+      }
+
+      limpiarAutenticacion();
+
+      window.location.replace("/login");
+    }, [limpiarAutenticacion]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -177,7 +261,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       usuario,
       rol,
       cargando,
-      estaAutenticado: Boolean(authUser),
+      estaAutenticado,
+      cuentaActiva,
+      tienePerfil,
       puede,
       recargarUsuario,
       cerrarSesion,
@@ -187,6 +273,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       usuario,
       rol,
       cargando,
+      estaAutenticado,
+      cuentaActiva,
+      tienePerfil,
       puede,
       recargarUsuario,
       cerrarSesion,

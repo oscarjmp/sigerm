@@ -1,140 +1,173 @@
-import TablaInventario from "@/components/inventario/TablaInventario";
+import Link from "next/link";
+
+import Can from "@/components/auth/Can";
+import RequirePermission from "@/components/auth/RequirePermission";
 import NuevoArticuloModal from "@/components/inventario/NuevoArticuloModal";
+import TablaInventario, {
+  type ArticuloInventario,
+} from "@/components/inventario/TablaInventario";
 import MainLayout from "@/components/layout/MainLayout";
+
+import { PERMISOS } from "@/lib/permissions/permissions";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function InventarioPage() {
-
   const supabase = await createClient();
 
-  const { data: articulos } = await supabase
+  const { data, error } = await supabase
     .from("articulos")
-    .select("*")
-    .order("nombre");
+    .select(`
+      id,
+      codigo,
+      nombre,
+      categoria,
+      cantidad,
+      estado,
+      imagen
+    `)
+    .order("nombre", {
+      ascending: true,
+    });
 
-  const totalArticulos = articulos?.length ?? 0;
+  if (error) {
+    console.error(
+      "Error al consultar el inventario:",
+      error.message,
+    );
+  }
 
-  const totalCategorias = new Set(
-    articulos?.map((a) => a.categoria)
-  ).size;
+  const articulos =
+    (data ?? []) as ArticuloInventario[];
+
+  const totalArticulos = articulos.length;
+
+  const categoriasValidas = articulos
+    .map((articulo) =>
+      articulo.categoria?.trim(),
+    )
+    .filter(
+      (categoria): categoria is string =>
+        Boolean(categoria),
+    );
+
+  const totalCategorias =
+    new Set(categoriasValidas).size;
 
   const totalExistencias =
-    articulos?.reduce(
-      (suma, articulo) => suma + articulo.cantidad,
-      0
-    ) ?? 0;
+    articulos.reduce(
+      (total, articulo) =>
+        total + (articulo.cantidad ?? 0),
+      0,
+    );
 
   const articulosMalos =
-    articulos?.filter(
-      (a) => a.estado === "Malo"
-    ).length ?? 0;
+    articulos.filter(
+      (articulo) =>
+        articulo.estado
+          ?.trim()
+          .toLowerCase() === "malo",
+    ).length;
 
   return (
-
     <MainLayout>
+      <RequirePermission
+        permiso={PERMISOS.VER_INVENTARIO}
+      >
+        <div className="space-y-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">
+                Inventario
+              </h1>
 
-      {/* Encabezado */}
+              <p className="mt-2 text-slate-500">
+                Consulta y administra los artículos disponibles en SIGERM.
+              </p>
+            </div>
 
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-5 mb-8">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Can
+                permiso={PERMISOS.CREAR_ARTICULO}
+              >
+                <NuevoArticuloModal />
+              </Can>
 
-        <h1 className="text-3xl md:text-4xl font-bold">
-          Inventario
-        </h1>
+              <Can
+                permiso={PERMISOS.VER_REPORTES}
+              >
+                <Link
+                  href="/reportes/inventario"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="
+                    rounded-xl bg-[#3483FA]
+                    px-6 py-3 text-center
+                    font-medium text-white
+                    shadow-md transition-all
+                    hover:bg-[#2968C8]
+                    hover:shadow-lg
+                  "
+                >
+                  Reporte Inventario
+                </Link>
+              </Can>
+            </div>
+          </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
+          {error && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+              No fue posible consultar el inventario:{" "}
+              {error.message}
+            </div>
+          )}
 
-          <NuevoArticuloModal />
+          <div className="grid grid-cols-2 gap-4 md:gap-6 xl:grid-cols-4">
+            <div className="rounded-2xl bg-white p-5 shadow-lg">
+              <p className="text-sm text-gray-500 md:text-base">
+                📦 Artículos
+              </p>
 
-          <a
-            href="/reportes/inventario"
-            target="_blank"
-            className="
-              bg-[#3483FA]
-              hover:bg-[#2968C8]
-              text-white
-              font-medium
-              text-center
-              px-6
-              py-3
-              rounded-xl
-              shadow-md
-              hover:shadow-lg
-              transition-all
-            "
-          >
-            Reporte Inventario
-          </a>
+              <h2 className="mt-3 text-3xl font-bold md:text-4xl">
+                {totalArticulos}
+              </h2>
+            </div>
 
+            <div className="rounded-2xl bg-white p-5 shadow-lg">
+              <p className="text-sm text-gray-500 md:text-base">
+                📂 Categorías
+              </p>
+
+              <h2 className="mt-3 text-3xl font-bold md:text-4xl">
+                {totalCategorias}
+              </h2>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow-lg">
+              <p className="text-sm text-gray-500 md:text-base">
+                🧮 Existencias
+              </p>
+
+              <h2 className="mt-3 text-3xl font-bold md:text-4xl">
+                {totalExistencias}
+              </h2>
+            </div>
+
+            <div className="rounded-2xl bg-white p-5 shadow-lg">
+              <p className="text-sm text-gray-500 md:text-base">
+                ⚠ Estado malo
+              </p>
+
+              <h2 className="mt-3 text-3xl font-bold text-red-600 md:text-4xl">
+                {articulosMalos}
+              </h2>
+            </div>
+          </div>
+
+          <TablaInventario
+            articulos={articulos}
+          />
         </div>
-
-      </div>
-
-      {/* Tarjetas */}
-
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 mb-8">
-
-        <div className="bg-white rounded-2xl shadow-lg p-5">
-
-          <p className="text-gray-500 text-sm md:text-base">
-            📦 Artículos
-          </p>
-
-          <h2 className="text-3xl md:text-4xl font-bold mt-3">
-            {totalArticulos}
-          </h2>
-
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-5">
-
-          <p className="text-gray-500 text-sm md:text-base">
-            📂 Categorías
-          </p>
-
-          <h2 className="text-3xl md:text-4xl font-bold mt-3">
-            {totalCategorias}
-          </h2>
-
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-5">
-
-          <p className="text-gray-500 text-sm md:text-base">
-            🧮 Existencias
-          </p>
-
-          <h2 className="text-3xl md:text-4xl font-bold mt-3">
-            {totalExistencias}
-          </h2>
-
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-lg p-5">
-
-          <p className="text-gray-500 text-sm md:text-base">
-            ⚠ Estado Malo
-          </p>
-
-          <h2 className="text-3xl md:text-4xl font-bold mt-3 text-red-600">
-            {articulosMalos}
-          </h2>
-
-        </div>
-
-      </div>
-
-      {/* Tabla */}
-
-      <div className="overflow-x-auto">
-
-        <TablaInventario
-          articulos={articulos ?? []}
-        />
-
-      </div>
-
+      </RequirePermission>
     </MainLayout>
-
   );
-
 }
