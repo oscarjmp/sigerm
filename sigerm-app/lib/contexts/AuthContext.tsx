@@ -5,12 +5,20 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import type { User } from "@supabase/supabase-js";
+import type {
+  AuthChangeEvent,
+  Session,
+  User,
+} from "@supabase/supabase-js";
 
-import { TODOS_LOS_ROLES, type NombreRol } from "@/lib/constants/roles";
+import {
+  TODOS_LOS_ROLES,
+  type NombreRol,
+} from "@/lib/constants/roles";
 import { tienePermiso } from "@/lib/permissions/menuPermissions";
 import type { Permiso } from "@/lib/permissions/permissions";
 import { crearUsuarioRepository } from "@/lib/repositories/usuario.repository";
@@ -64,18 +72,28 @@ export function AuthProvider({
 
   const [cargando, setCargando] = useState(true);
 
+  const montadoRef = useRef(true);
+
   const usuarioRepository = useMemo(
     () => crearUsuarioRepository(supabase),
     [],
   );
 
   const limpiarAutenticacion = useCallback(() => {
+    if (!montadoRef.current) {
+      return;
+    }
+
     setAuthUser(null);
     setUsuario(null);
   }, []);
 
   const cargarPerfil = useCallback(
     async (user: User | null) => {
+      if (!montadoRef.current) {
+        return;
+      }
+
       if (!user) {
         limpiarAutenticacion();
         return;
@@ -83,36 +101,51 @@ export function AuthProvider({
 
       setAuthUser(user);
 
-      const perfil =
-        await usuarioRepository.obtenerPorAuthId(
-          user.id,
-        );
+      try {
+        const perfil =
+          await usuarioRepository.obtenerPorAuthId(
+            user.id,
+          );
 
-      if (!perfil) {
+        if (!montadoRef.current) {
+          return;
+        }
+
+        if (!perfil) {
+          console.warn(
+            "El usuario autenticado no tiene un perfil registrado en public.usuarios.",
+          );
+
+          limpiarAutenticacion();
+
+          await supabase.auth.signOut();
+
+          return;
+        }
+
+        if (!perfil.activo) {
+          console.warn(
+            "Se bloqueó el acceso porque la cuenta está inactiva.",
+          );
+
+          limpiarAutenticacion();
+
+          await supabase.auth.signOut();
+
+          return;
+        }
+
+        setUsuario(perfil);
+      } catch (error) {
         console.error(
-          "El usuario autenticado no tiene un perfil registrado en public.usuarios.",
+          "No fue posible cargar el perfil del usuario:",
+          error,
         );
 
         limpiarAutenticacion();
 
-        await supabase.auth.signOut();
-
-        return;
+        throw error;
       }
-
-      if (!perfil.activo) {
-        console.warn(
-          "Se bloqueó el acceso porque la cuenta está inactiva.",
-        );
-
-        limpiarAutenticacion();
-
-        await supabase.auth.signOut();
-
-        return;
-      }
-
-      setUsuario(perfil);
     },
     [
       limpiarAutenticacion,
@@ -120,56 +153,56 @@ export function AuthProvider({
     ],
   );
 
+  const cargarSesionActual = useCallback(
+    async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        throw new Error(
+          `No fue posible obtener la sesión: ${error.message}`,
+        );
+      }
+
+      await cargarPerfil(
+        session?.user ?? null,
+      );
+    },
+    [cargarPerfil],
+  );
+
   const recargarUsuario =
     useCallback(async () => {
-      setCargando(true);
+      if (montadoRef.current) {
+        setCargando(true);
+      }
 
       try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-
-        if (error) {
-          throw new Error(
-            `No fue posible obtener la sesión: ${error.message}`,
-          );
-        }
-
-        await cargarPerfil(user);
+        await cargarSesionActual();
       } finally {
-        setCargando(false);
+        if (montadoRef.current) {
+          setCargando(false);
+        }
       }
-    }, [cargarPerfil]);
+    }, [cargarSesionActual]);
 
   useEffect(() => {
-    let montado = true;
+    montadoRef.current = true;
 
     async function iniciarAutenticacion() {
       try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser();
-
-        if (error) {
-          throw error;
-        }
-
-        if (montado) {
-          await cargarPerfil(user);
-        }
+        await cargarSesionActual();
       } catch (error) {
         console.error(
           "Error al cargar la autenticación:",
           error,
         );
 
-        if (montado) {
-          limpiarAutenticacion();
-        }
+        limpiarAutenticacion();
       } finally {
-        if (montado) {
+        if (montadoRef.current) {
           setCargando(false);
         }
       }
@@ -180,25 +213,38 @@ export function AuthProvider({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setCargando(true);
+      (
+        _event: AuthChangeEvent,
+        session: Session | null,
+      ) => {
+        if (montadoRef.current) {
+          setCargando(true);
+        }
 
         void cargarPerfil(
           session?.user ?? null,
-        ).finally(() => {
-          if (montado) {
-            setCargando(false);
-          }
-        });
+        )
+          .catch((error) => {
+            console.error(
+              "Error al actualizar la autenticación:",
+              error,
+            );
+          })
+          .finally(() => {
+            if (montadoRef.current) {
+              setCargando(false);
+            }
+          });
       },
     );
 
     return () => {
-      montado = false;
+      montadoRef.current = false;
       subscription.unsubscribe();
     };
   }, [
     cargarPerfil,
+    cargarSesionActual,
     limpiarAutenticacion,
   ]);
 
@@ -216,7 +262,7 @@ export function AuthProvider({
   const estaAutenticado = Boolean(
     authUser &&
       usuario &&
-      usuario.activo &&
+      cuentaActiva &&
       rol,
   );
 
@@ -230,7 +276,10 @@ export function AuthProvider({
         return false;
       }
 
-      return tienePermiso(rol, permiso);
+      return tienePermiso(
+        rol,
+        permiso,
+      );
     },
     [
       cargando,

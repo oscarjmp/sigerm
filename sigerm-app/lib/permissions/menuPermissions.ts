@@ -12,12 +12,20 @@ export const PERMISOS_POR_ROL: Record<
   NombreRol,
   readonly Permiso[]
 > = {
+  // =====================================================
+  // ADMINISTRADOR
+  // =====================================================
+
   [ROLES.ADMINISTRADOR]: Object.values(PERMISOS),
+
+  // =====================================================
+  // COORDINADOR
+  // =====================================================
 
   [ROLES.COORDINADOR]: [
     PERMISOS.VER_DASHBOARD,
 
-    PERMISOS.VER_INVENTARIO,
+    PERMISOS.VER_CATALOGO,
 
     PERMISOS.VER_PRESTAMOS,
     PERMISOS.CREAR_PRESTAMO,
@@ -39,22 +47,27 @@ export const PERMISOS_POR_ROL: Record<
     PERMISOS.VER_REPORTES,
   ],
 
-  [ROLES.INVENTARIO]: [
-    PERMISOS.VER_DASHBOARD,
+  // =====================================================
+  // INVENTARIO
+  // =====================================================
 
-    PERMISOS.VER_INVENTARIO,
-    PERMISOS.CREAR_ARTICULO,
-    PERMISOS.EDITAR_ARTICULO,
-    PERMISOS.DESACTIVAR_ARTICULO,
+  [ROLES.INVENTARIO]: [
+    PERMISOS.VER_CATALOGO,
 
     PERMISOS.VER_PRESTAMOS,
     PERMISOS.CREAR_PRESTAMO,
     PERMISOS.EDITAR_PRESTAMO,
     PERMISOS.REGISTRAR_DEVOLUCION,
+
+    PERMISOS.VER_MATRIMONIOS,
   ],
 
+  // =====================================================
+  // SECRETARIA
+  // =====================================================
+
   [ROLES.SECRETARIA]: [
-    PERMISOS.VER_DASHBOARD,
+    PERMISOS.VER_CATALOGO,
 
     PERMISOS.VER_ENCUENTROS,
 
@@ -65,9 +78,26 @@ export const PERMISOS_POR_ROL: Record<
     PERMISOS.VER_SERVIDORES,
   ],
 
+  // =====================================================
+  // TESORERIA
+  // =====================================================
+
   [ROLES.TESORERIA]: [
-    PERMISOS.VER_DASHBOARD,
+    PERMISOS.VER_CATALOGO,
+
+    PERMISOS.VER_MATRIMONIOS,
+
     PERMISOS.VER_REPORTES,
+  ],
+
+  // =====================================================
+  // SOLICITANTE
+  // =====================================================
+
+  [ROLES.SOLICITANTE]: [
+    PERMISOS.VER_CATALOGO,
+    PERMISOS.VER_PRESTAMOS,
+    PERMISOS.VER_MATRIMONIOS,
   ],
 };
 
@@ -80,7 +110,8 @@ export function tienePermiso(
   }
 
   return (
-    PERMISOS_POR_ROL[rol]?.includes(permiso) ??
-    false
+    PERMISOS_POR_ROL[rol]?.includes(
+      permiso,
+    ) ?? false
   );
 }

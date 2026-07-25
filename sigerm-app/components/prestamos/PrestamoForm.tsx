@@ -1,21 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import { obtenerMatrimonios } from "@/lib/services/matrimonios";
+import { supabase } from "@/lib/supabase/client";
+
 type Articulo = {
   id: string;
   codigo: string;
   nombre: string;
-  categoria: string;
+  categoria: string | null;
   cantidad: number;
+  disponibles: number;
+  activo?: boolean | null;
 };
 
 type ArticuloPrestamo = {
   articulo_id: string;
   codigo: string;
   nombre: string;
+  disponibles: number;
   cantidad: number;
 };
 
@@ -25,815 +30,945 @@ type Matrimonio = {
   esposa: string;
   telefono: string | null;
   email: string | null;
-  ministerio: string;
+  ministerio: string | null;
+  activo?: boolean | null;
 };
-type Props = {
+
+type PrestamoRpcResponse = {
+  success: boolean;
+  prestamo: {
+    id: string;
+    folio: string;
+    responsable: string;
+    solicitante: string | null;
+    estado: string;
+    fecha_prestamo: string | null;
+    fecha_devolucion: string | null;
+  };
+  detalles: unknown[];
+  movimientos: unknown[];
+  resumen: {
+    total_articulos: number;
+    total_unidades: number;
+  };
+};
+
+type PrestamoFormProps = {
   articulos: Articulo[];
 };
 
-export default function PrestamoForm({ articulos }: Props) {
+const RESPONSABLE_PREDETERMINADO =
+  "OSCAR Y SANDRA";
 
+function obtenerFechaActual(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+export default function PrestamoForm({
+  articulos,
+}: PrestamoFormProps) {
   const router = useRouter();
 
-  //==============================
-  // DATOS DEL PRÉSTAMO
-  //==============================
+  const [matrimonios, setMatrimonios] =
+    useState<Matrimonio[]>([]);
 
-  const [folio, setFolio] = useState("");
-const [matrimonios, setMatrimonios] =
-  useState<Matrimonio[]>([]);
+  const [matrimonioId, setMatrimonioId] =
+    useState("");
 
-const [matrimonioId, setMatrimonioId] =
-  useState("");
+  const [ministerio, setMinisterio] =
+    useState("");
 
-const [ministerio, setMinisterio] =
-  useState("");
-  const [responsable, setResponsable] = useState("");
+  const [responsable, setResponsable] = useState(
+    RESPONSABLE_PREDETERMINADO,
+  );
 
-  const [solicitante, setSolicitante] = useState("");
+  const [solicitante, setSolicitante] =
+    useState("");
 
-  const [telefono, setTelefono] = useState("");
+  const [telefono, setTelefono] =
+    useState("");
 
   const [correo, setCorreo] = useState("");
 
-  const [tipoEvento, setTipoEvento] = useState("");
+  const [fechaDevolucion, setFechaDevolucion] =
+    useState("");
 
-  const [evento, setEvento] = useState("");
+  const [observaciones, setObservaciones] =
+    useState("");
 
-  const [lugar, setLugar] = useState("");
+  const [
+    articuloSeleccionado,
+    setArticuloSeleccionado,
+  ] = useState("");
 
-  const [fechaDevolucion, setFechaDevolucion] = useState("");
+  const [
+    cantidadArticulo,
+    setCantidadArticulo,
+  ] = useState(1);
 
-  const [observaciones, setObservaciones] = useState("");
+  const [detalle, setDetalle] = useState<
+    ArticuloPrestamo[]
+  >([]);
 
-  //==============================
-  // ARTÍCULO TEMPORAL
-  //==============================
+  const [guardando, setGuardando] =
+    useState(false);
 
-  const [articuloSeleccionado, setArticuloSeleccionado] = useState("");
-
-  const [cantidadArticulo, setCantidadArticulo] = useState(1);
-
-  //==============================
-  // CARRITO
-  //==============================
-
-  const [detalle, setDetalle] = useState<ArticuloPrestamo[]>([]);
-
-  //==============================
-  // CARGANDO
-  //==============================
-
-  const [guardando, setGuardando] = useState(false);
-
-  //==============================
-  // OBTENER FOLIO
-  //==============================
+  const [
+    cargandoMatrimonios,
+    setCargandoMatrimonios,
+  ] = useState(true);
 
   useEffect(() => {
+    let componenteActivo = true;
 
-  obtenerFolio();
+    async function cargarMatrimonios() {
+      setCargandoMatrimonios(true);
 
-  cargarMatrimonios();
+      try {
+        const { data, error } =
+          await obtenerMatrimonios();
 
-}, []);
+        if (error) {
+          throw new Error(error.message);
+        }
 
-  async function obtenerFolio() {
+        if (!componenteActivo) {
+          return;
+        }
 
-    const { data, error } = await supabase.rpc(
-      "generar_folio_prestamo"
-    );
+        const registros = (
+          (data ?? []) as Matrimonio[]
+        )
+          .filter(
+            (matrimonio) =>
+              matrimonio.activo !== false,
+          )
+          .sort((a, b) => {
+            const nombreA =
+              `${a.esposo} ${a.esposa}`;
 
-    if (!error && data) {
+            const nombreB =
+              `${b.esposo} ${b.esposa}`;
 
-      setFolio(data);
+            return nombreA.localeCompare(
+              nombreB,
+              "es",
+            );
+          });
 
+        setMatrimonios(registros);
+      } catch (error) {
+        if (!componenteActivo) {
+          return;
+        }
+
+        const mensaje =
+          error instanceof Error
+            ? error.message
+            : "No fue posible cargar los matrimonios.";
+
+        window.alert(mensaje);
+      } finally {
+        if (componenteActivo) {
+          setCargandoMatrimonios(false);
+        }
+      }
     }
 
+    void cargarMatrimonios();
+
+    return () => {
+      componenteActivo = false;
+    };
+  }, []);
+
+  const articulosDisponibles = useMemo(() => {
+    return articulos
+      .filter(
+        (articulo) =>
+          articulo.activo !== false &&
+          articulo.disponibles > 0,
+      )
+      .sort((a, b) =>
+        a.nombre.localeCompare(
+          b.nombre,
+          "es",
+        ),
+      );
+  }, [articulos]);
+
+  const totalUnidades = useMemo(() => {
+    return detalle.reduce(
+      (total, articulo) =>
+        total + articulo.cantidad,
+      0,
+    );
+  }, [detalle]);
+
+  function seleccionarMatrimonio(id: string) {
+    setMatrimonioId(id);
+
+    if (!id) {
+      setSolicitante("");
+      setTelefono("");
+      setCorreo("");
+      setMinisterio("");
+      return;
+    }
+
+    const matrimonio = matrimonios.find(
+      (item) => item.id === id,
+    );
+
+    if (!matrimonio) {
+      setSolicitante("");
+      setTelefono("");
+      setCorreo("");
+      setMinisterio("");
+      return;
+    }
+
+    setSolicitante(
+      `${matrimonio.esposo} Y ${matrimonio.esposa}`,
+    );
+
+    setTelefono(matrimonio.telefono ?? "");
+    setCorreo(matrimonio.email ?? "");
+    setMinisterio(
+      matrimonio.ministerio ?? "",
+    );
   }
-  async function cargarMatrimonios() {
-
-  const { data } =
-    await obtenerMatrimonios();
-
-  if (data) {
-
-    setMatrimonios(data);
-
-  }
-
-}
-  //==============================
-  // AGREGAR ARTÍCULO AL PRÉSTAMO
-  //==============================
 
   function agregarArticulo() {
-
     if (!articuloSeleccionado) {
-
-      alert("Seleccione un artículo.");
-
-      return;
-
-    }
-
-    const articulo = articulos.find(
-      (a) => a.id === articuloSeleccionado
-    );
-
-    if (!articulo) return;
-
-    if (cantidadArticulo <= 0) {
-
-      alert("La cantidad debe ser mayor a cero.");
-
-      return;
-
-    }
-
-    if (cantidadArticulo > articulo.cantidad) {
-
-      alert(
-        `Solo existen ${articulo.cantidad} unidades disponibles.`
+      window.alert(
+        "Seleccione un artículo.",
       );
-
       return;
-
     }
 
-    const existe = detalle.find(
-      (d) => d.articulo_id === articulo.id
+    const articulo = articulosDisponibles.find(
+      (item) =>
+        item.id === articuloSeleccionado,
     );
 
-    if (existe) {
-
-      alert("Este artículo ya fue agregado.");
-
+    if (!articulo) {
+      window.alert(
+        "El artículo seleccionado no está disponible.",
+      );
       return;
-
     }
 
-    setDetalle([
+    if (
+      !Number.isInteger(cantidadArticulo) ||
+      cantidadArticulo <= 0
+    ) {
+      window.alert(
+        "La cantidad debe ser un número entero mayor que cero.",
+      );
+      return;
+    }
 
-      ...detalle,
+    if (
+      cantidadArticulo > articulo.disponibles
+    ) {
+      window.alert(
+        `Solo existen ${articulo.disponibles} unidades disponibles.`,
+      );
+      return;
+    }
 
+    const yaFueAgregado = detalle.some(
+      (item) =>
+        item.articulo_id === articulo.id,
+    );
+
+    if (yaFueAgregado) {
+      window.alert(
+        "Este artículo ya fue agregado al préstamo.",
+      );
+      return;
+    }
+
+    setDetalle((detalleActual) => [
+      ...detalleActual,
       {
-
         articulo_id: articulo.id,
-
         codigo: articulo.codigo,
-
         nombre: articulo.nombre,
-
+        disponibles:
+          articulo.disponibles,
         cantidad: cantidadArticulo,
-
       },
-
     ]);
 
     setArticuloSeleccionado("");
-
     setCantidadArticulo(1);
-
   }
 
-  //==============================
-  // ELIMINAR ARTÍCULO
-  //==============================
-
-  function eliminarArticulo(id: string) {
-
-    setDetalle(
-
-      detalle.filter(
-
-        (articulo) => articulo.articulo_id !== id
-
-      )
-
+  function eliminarArticulo(
+    articuloId: string,
+  ) {
+    setDetalle((detalleActual) =>
+      detalleActual.filter(
+        (articulo) =>
+          articulo.articulo_id !==
+          articuloId,
+      ),
     );
-
   }
 
-  //==============================
-  // TOTAL DE ARTÍCULOS
-  //==============================
-
-  const totalArticulos = detalle.reduce(
-
-    (total, articulo) => total + articulo.cantidad,
-
-    0
-
-  );
-//==============================
-// GUARDAR PRÉSTAMO
-//==============================
-
-async function guardarPrestamo() {
-
-  if (!responsable) {
-    alert("Capture el responsable.");
-    return;
-  }
-
- if (!matrimonioId) {
-
-  alert("Seleccione un matrimonio.");
-
-  return;
-
-}
-
-  if (detalle.length === 0) {
-    alert("Agregue al menos un artículo.");
-    return;
-  }
-
-  setGuardando(true);
-
-  //==============================
-  // GUARDAR CABECERA
-  //==============================
-
-  const { data: prestamo, error } = await supabase
-    .from("prestamos")
-    .insert({
-      folio,
-      matrimonio_id: matrimonioId,
-      responsable: responsable.toUpperCase(),
-      solicitante: solicitante.toUpperCase(),
-      telefono,
-      correo,
-      tipo_evento: tipoEvento,
-      evento: evento.toUpperCase(),
-      lugar: lugar.toUpperCase(),
-      fecha_devolucion:
-        fechaDevolucion || null,
-      observaciones:
-        observaciones.toUpperCase(),
-      estado: "PRESTADO",
-    })
-    .select()
-    .single();
-
-  if (error) {
-
-    setGuardando(false);
-
-    alert(error.message);
-
-    return;
-
-  }
-
-  //==============================
-  // GUARDAR DETALLE
-  //==============================
-
-  for (const item of detalle) {
-
-    const articulo = articulos.find(
-      (a) => a.id === item.articulo_id
+  function limpiarFormulario() {
+    setResponsable(
+      RESPONSABLE_PREDETERMINADO,
     );
+    setMatrimonioId("");
+    setSolicitante("");
+    setTelefono("");
+    setCorreo("");
+    setMinisterio("");
+    setFechaDevolucion("");
+    setObservaciones("");
+    setArticuloSeleccionado("");
+    setCantidadArticulo(1);
+    setDetalle([]);
+  }
 
-    if (!articulo) continue;
+  function validarFormulario(): boolean {
+    if (!responsable.trim()) {
+      window.alert(
+        "Capture el responsable que entrega el material.",
+      );
+      return false;
+    }
 
-   // detalle
+    if (!matrimonioId) {
+      window.alert(
+        "Seleccione el matrimonio solicitante.",
+      );
+      return false;
+    }
 
-const { error: errorDetalle } = await supabase
-  .from("detalle_prestamo")
-  .insert({
-    prestamo_id: prestamo.id,
-    articulo_id: item.articulo_id,
-    cantidad: item.cantidad,
-  });
+    if (!solicitante.trim()) {
+      window.alert(
+        "No fue posible determinar el solicitante.",
+      );
+      return false;
+    }
 
-if (errorDetalle) {
-  console.log(JSON.stringify(errorDetalle, null, 2));
-  alert(JSON.stringify(errorDetalle, null, 2));
-  setGuardando(false);
-  return;
-}
+    if (!fechaDevolucion) {
+      window.alert(
+        "Capture la fecha estimada de devolución.",
+      );
+      return false;
+    }
 
-    // inventario
+    if (detalle.length === 0) {
+      window.alert(
+        "Agregue al menos un artículo.",
+      );
+      return false;
+    }
 
-    await supabase
-      .from("articulos")
-      .update({
+    return true;
+  }
 
-        cantidad:
-          articulo.cantidad -
-          item.cantidad,
+  async function guardarPrestamo() {
+    if (guardando) {
+      return;
+    }
 
-      })
-      .eq("id", item.articulo_id);
+    if (!validarFormulario()) {
+      return;
+    }
 
-    // movimientos
+    setGuardando(true);
 
-    await supabase
-      .from("movimientos")
-      .insert({
+    try {
+      const payload = {
+        responsable: responsable.trim(),
+        matrimonio_id: matrimonioId,
+        solicitante: solicitante.trim(),
+        telefono:
+          telefono.trim() || null,
+        correo: correo.trim() || null,
 
-        articulo_id: item.articulo_id,
+        /*
+         * Estos valores se mantienen para conservar
+         * compatibilidad con la función RPC actual,
+         * aunque ya no se capturan en el formulario.
+         */
+        tipo_evento: null,
+        evento: null,
+        lugar: null,
 
-        prestamo_id: prestamo.id,
-
-        tipo: "SALIDA",
-
-        cantidad: item.cantidad,
-
-        usuario: responsable,
+        fecha_devolucion:
+          fechaDevolucion || null,
 
         observaciones:
-          "PRÉSTAMO " + folio,
+          observaciones.trim() || null,
 
-      });
+        autorizado_por:
+          responsable.trim(),
 
+        recibido_por:
+          solicitante.trim(),
+
+        articulos: detalle.map((item) => ({
+          articulo_id: item.articulo_id,
+          cantidad: item.cantidad,
+        })),
+      };
+
+      const { data, error } =
+        await supabase.rpc(
+          "registrar_prestamo",
+          {
+            p_prestamo: payload,
+          },
+        );
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data) {
+        throw new Error(
+          "La base de datos no devolvió el préstamo registrado.",
+        );
+      }
+
+      const resultado =
+        data as PrestamoRpcResponse;
+
+      if (
+        !resultado.success ||
+        !resultado.prestamo?.folio
+      ) {
+        throw new Error(
+          "La respuesta del registro de préstamo no es válida.",
+        );
+      }
+
+      window.alert(
+        [
+          "Préstamo registrado correctamente.",
+          `Folio: ${resultado.prestamo.folio}`,
+          `Artículos diferentes: ${resultado.resumen.total_articulos}`,
+          `Unidades prestadas: ${resultado.resumen.total_unidades}`,
+        ].join("\n"),
+      );
+
+      limpiarFormulario();
+      router.refresh();
+    } catch (error) {
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : "No fue posible registrar el préstamo.";
+
+      window.alert(mensaje);
+    } finally {
+      setGuardando(false);
+    }
   }
 
-  alert("Préstamo registrado correctamente.");
-
-  setGuardando(false);
-
-  router.refresh();
-
-  //==============================
-  // LIMPIAR FORMULARIO
-  //==============================
-
-  setResponsable("");
-  setSolicitante("");
-  setMatrimonioId("");
-
-setMinisterio("");
-  setTelefono("");
-  setCorreo("");
-  setEvento("");
-  setLugar("");
-  setTipoEvento("");
-  setFechaDevolucion("");
-  setObservaciones("");
-
-  setDetalle([]);
-
-  setArticuloSeleccionado("");
-
-  setCantidadArticulo(1);
-
-  obtenerFolio();
-
-}
   return (
-
-    <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-
-      <div className="flex items-center justify-between mb-8">
-
+    <div className="mb-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
+      {/* Encabezado */}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-
-          <h2 className="text-3xl font-bold text-slate-800">
+          <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">
             Nuevo préstamo
           </h2>
 
-          <p className="text-gray-500 mt-1">
-            Registro de préstamo de artículos
+          <p className="mt-1 text-slate-500">
+            Registre la entrega temporal de
+            artículos del inventario.
           </p>
-
         </div>
 
-        <div className="text-right">
-
-          <p className="text-sm text-gray-500">
+        <div className="rounded-2xl bg-blue-50 px-5 py-3 text-left sm:text-right">
+          <p className="text-sm text-slate-500">
             Folio
           </p>
 
-          <p className="text-2xl font-bold text-blue-600">
-            {folio}
+          <p className="text-lg font-bold text-blue-600">
+            Se generará al guardar
           </p>
+        </div>
+      </div>
 
+      {/* Datos generales */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div>
+          <label
+            htmlFor="responsable"
+            className="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Responsable que entrega el material
+          </label>
+
+          <input
+            id="responsable"
+            type="text"
+            placeholder="Nombre del responsable"
+            value={responsable}
+            onChange={(event) =>
+              setResponsable(
+                event.target.value.toUpperCase(),
+              )
+            }
+            className="
+              min-h-12 w-full rounded-2xl
+              border border-slate-300
+              bg-slate-50 px-4 py-3
+              outline-none transition
+              focus:border-blue-500
+              focus:ring-4
+              focus:ring-blue-100
+            "
+            autoComplete="off"
+          />
         </div>
 
+        <div>
+          <label
+            htmlFor="matrimonio"
+            className="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Matrimonio solicitante
+          </label>
+
+          <select
+            id="matrimonio"
+            value={matrimonioId}
+            onChange={(event) =>
+              seleccionarMatrimonio(
+                event.target.value,
+              )
+            }
+            disabled={cargandoMatrimonios}
+            className="
+              min-h-12 w-full rounded-2xl
+              border border-slate-300
+              bg-white px-4 py-3
+              outline-none transition
+              focus:border-blue-500
+              focus:ring-4
+              focus:ring-blue-100
+              disabled:bg-slate-100
+            "
+          >
+            <option value="">
+              {cargandoMatrimonios
+                ? "Cargando matrimonios..."
+                : "Seleccione un matrimonio..."}
+            </option>
+
+            {matrimonios.map(
+              (matrimonio) => (
+                <option
+                  key={matrimonio.id}
+                  value={matrimonio.id}
+                >
+                  {matrimonio.esposo} y{" "}
+                  {matrimonio.esposa}
+                </option>
+              ),
+            )}
+          </select>
+        </div>
+
+        {/* Datos del matrimonio */}
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 md:col-span-2">
+          <h3 className="mb-4 font-semibold text-slate-700">
+            Información del matrimonio
+          </h3>
+
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+            <div>
+              <p className="text-xs text-slate-500">
+                Teléfono
+              </p>
+
+              <p className="mt-1 font-medium text-slate-800">
+                {telefono || "Sin teléfono"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs text-slate-500">
+                Correo
+              </p>
+
+              <p className="mt-1 break-all font-medium text-slate-800">
+                {correo || "Sin correo"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs text-slate-500">
+                Ministerio
+              </p>
+
+              <p className="mt-1 font-medium text-slate-800">
+                {ministerio ||
+                  "Sin ministerio"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Fecha */}
+        <div>
+          <label
+            htmlFor="fechaDevolucion"
+            className="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Fecha estimada de devolución
+          </label>
+
+          <input
+            id="fechaDevolucion"
+            type="date"
+            value={fechaDevolucion}
+            min={obtenerFechaActual()}
+            onChange={(event) =>
+              setFechaDevolucion(
+                event.target.value,
+              )
+            }
+            className="
+              min-h-12 w-full rounded-2xl
+              border border-slate-300
+              bg-white px-4 py-3
+              outline-none transition
+              focus:border-blue-500
+              focus:ring-4
+              focus:ring-blue-100
+            "
+          />
+        </div>
+
+        {/* Observaciones */}
+        <div>
+          <label
+            htmlFor="observaciones"
+            className="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Observaciones
+          </label>
+
+          <textarea
+            id="observaciones"
+            placeholder="Observaciones del préstamo"
+            value={observaciones}
+            onChange={(event) =>
+              setObservaciones(
+                event.target.value.toUpperCase(),
+              )
+            }
+            className="
+              min-h-12 w-full resize-y
+              rounded-2xl border
+              border-slate-300
+              bg-white px-4 py-3
+              outline-none transition
+              focus:border-blue-500
+              focus:ring-4
+              focus:ring-blue-100
+            "
+            rows={3}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
+      <hr className="my-8 border-slate-200" />
 
-     <input
-  placeholder="Responsable que entrega el material"
-  value={responsable}
-  onChange={(e) =>
-    setResponsable(e.target.value.toUpperCase())
-  }
-  className="border rounded-xl p-3 bg-gray-50"
-  autoComplete="off"
-/>
-
-<select
-  value={matrimonioId}
-  onChange={(e) => {
-
-    const id = e.target.value;
-
-    setMatrimonioId(id);
-
-    const matrimonio = matrimonios.find(
-      (m) => m.id === id
-    );
-
-    if (!matrimonio) return;
-
-    setSolicitante(
-      `${matrimonio.esposo} y ${matrimonio.esposa}`
-    );
-
-    setTelefono(
-      matrimonio.telefono ?? ""
-    );
-
-    setCorreo(
-      matrimonio.email ?? ""
-    );
-
-    setMinisterio(
-      matrimonio.ministerio
-    );
-
-  }}
-  className="border rounded-xl p-3"
->
-
-  <option value="">
-    Seleccione un matrimonio...
-  </option>
-
-  {matrimonios.map((m) => (
-
-    <option
-      key={m.id}
-      value={m.id}
-    >
-
-      {m.esposo} y {m.esposa}
-
-    </option>
-
-  ))}
-
-</select>
-
-<div className="col-span-2 bg-slate-50 border rounded-2xl p-5">
-
-  <h3 className="font-semibold text-slate-700 mb-4">
-    Información del matrimonio
-  </h3>
-
-  <div className="grid md:grid-cols-3 gap-4">
-
-    <div>
-
-      <p className="text-xs text-gray-500">
-        📞 Teléfono
-      </p>
-
-      <p className="font-medium text-slate-800">
-        {telefono || "Sin teléfono"}
-      </p>
-
-    </div>
-
-    <div>
-
-      <p className="text-xs text-gray-500">
-        ✉ Correo
-      </p>
-
-      <p className="font-medium text-slate-800 break-all">
-        {correo || "Sin correo"}
-      </p>
-
-    </div>
-
-    <div>
-
-      <p className="text-xs text-gray-500">
-        ❤️ Ministerio
-      </p>
-
-      <p className="font-medium text-slate-800">
-        {ministerio || "Sin ministerio"}
-      </p>
-
-    </div>
-
-  </div>
-
-</div>
-        <select
-          value={tipoEvento}
-          onChange={(e) =>
-            setTipoEvento(e.target.value)
-          }
-          className="border rounded-xl p-3"
-        >
-
-          <option value="">
-            Tipo de evento
-          </option>
-
-          <option>ENCUENTRO</option>
-
-          <option>PRE-ENCUENTRO</option>
-
-          <option>POST-ENCUENTRO</option>
-
-          <option>RETIRO</option>
-
-          <option>OTRO</option>
-<option>SALIDA LIBRE</option>
-        </select>
-
-      <input
-  placeholder="Motivo del préstamo"
-  value={evento}
-  onChange={(e) =>
-    setEvento(e.target.value.toUpperCase())
-  }
-  className="border rounded-xl p-3"
-/>
-
-        <input
-          placeholder="Lugar"
-          value={lugar}
-          onChange={(e) =>
-            setLugar(e.target.value.toUpperCase())
-          }
-          className="border rounded-xl p-3"
-        />
-
-      {tipoEvento !== "SALIDA LIBRE" && (
-
-  <input
-    type="date"
-    value={fechaDevolucion}
-    onChange={(e) =>
-      setFechaDevolucion(e.target.value)
-    }
-    className="border rounded-xl p-3"
-  />
-
-)}
-
-        <textarea
-          placeholder="Observaciones"
-          value={observaciones}
-          onChange={(e) =>
-            setObservaciones(
-              e.target.value.toUpperCase()
-            )
-          }
-          className="border rounded-xl p-3 col-span-2"
-          rows={3}
-        />
-
-      </div>
-
-      <hr className="my-8" />      <h3 className="text-xl font-semibold mb-4 text-slate-700">
+      {/* Artículos */}
+      <h3 className="mb-4 text-xl font-bold text-slate-800">
         Artículos del préstamo
       </h3>
 
-      <div className="grid grid-cols-12 gap-4 items-end">
-
-        <div className="col-span-7">
-
-          <label className="block text-sm font-medium mb-2">
+      <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-12">
+        <div className="md:col-span-7">
+          <label
+            htmlFor="articulo"
+            className="mb-2 block text-sm font-semibold text-slate-700"
+          >
             Artículo
           </label>
 
           <select
+            id="articulo"
             value={articuloSeleccionado}
-            onChange={(e) =>
-              setArticuloSeleccionado(e.target.value)
+            onChange={(event) =>
+              setArticuloSeleccionado(
+                event.target.value,
+              )
             }
-            className="w-full border rounded-xl p-3"
+            className="
+              min-h-12 w-full rounded-2xl
+              border border-slate-300
+              bg-white px-4 py-3
+              outline-none transition
+              focus:border-blue-500
+              focus:ring-4
+              focus:ring-blue-100
+            "
           >
-
             <option value="">
               Seleccione un artículo...
             </option>
 
-            {articulos
-  .filter((articulo) => articulo.cantidad > 0)
-  .map((articulo) => (
-
-              <option
-                key={articulo.id}
-                value={articulo.id}
-              >
-                {articulo.codigo} - {articulo.nombre} ({articulo.cantidad})
-              </option>
-
-            ))}
-
+            {articulosDisponibles.map(
+              (articulo) => (
+                <option
+                  key={articulo.id}
+                  value={articulo.id}
+                >
+                  {articulo.codigo} -{" "}
+                  {articulo.nombre} (
+                  {articulo.disponibles} disponibles)
+                </option>
+              ),
+            )}
           </select>
-
         </div>
 
-        <div className="col-span-2">
-
-          <label className="block text-sm font-medium mb-2">
+        <div className="md:col-span-2">
+          <label
+            htmlFor="cantidadArticulo"
+            className="mb-2 block text-sm font-semibold text-slate-700"
+          >
             Cantidad
           </label>
 
           <input
+            id="cantidadArticulo"
             type="number"
             min={1}
+            step={1}
             value={cantidadArticulo}
-            onChange={(e) =>
-              setCantidadArticulo(Number(e.target.value))
+            onChange={(event) =>
+              setCantidadArticulo(
+                Number(event.target.value),
+              )
             }
-            className="w-full border rounded-xl p-3"
+            className="
+              min-h-12 w-full rounded-2xl
+              border border-slate-300
+              bg-white px-4 py-3
+              outline-none transition
+              focus:border-blue-500
+              focus:ring-4
+              focus:ring-blue-100
+            "
           />
-
         </div>
 
-        <div className="col-span-3">
-
+        <div className="md:col-span-3">
           <button
             type="button"
             onClick={agregarArticulo}
             className="
-              w-full
-              bg-[#3483FA]
+              min-h-12 w-full
+              rounded-2xl bg-[#3483FA]
+              px-5 py-3
+              font-semibold text-white
+              shadow-sm transition
+              hover:-translate-y-0.5
               hover:bg-[#2968C8]
-              text-white
-              font-medium
-              rounded-xl
-              p-3
-              transition
+              hover:shadow-md
             "
           >
             Agregar al préstamo
           </button>
-
         </div>
-
       </div>
 
-      <div className="mt-8 overflow-hidden rounded-xl border">
-
-        <table className="w-full">
+      {/* Tabla escritorio */}
+      <div className="mt-8 hidden overflow-hidden rounded-2xl border border-slate-200 sm:block">
+        <table className="w-full table-fixed">
+          <colgroup>
+            <col className="w-[18%]" />
+            <col className="w-[38%]" />
+            <col className="w-[15%]" />
+            <col className="w-[14%]" />
+            <col className="w-[15%]" />
+          </colgroup>
 
           <thead className="bg-slate-100">
-
             <tr>
-
-              <th className="text-left p-4">
+              <th className="p-4 text-left">
                 Código
               </th>
 
-              <th className="text-left p-4">
+              <th className="p-4 text-left">
                 Artículo
               </th>
 
-              <th className="text-center p-4">
+              <th className="p-4 text-center">
+                Disponibles
+              </th>
+
+              <th className="p-4 text-center">
                 Cantidad
               </th>
 
-              <th className="text-center p-4">
+              <th className="p-4 text-center">
                 Acción
               </th>
-
             </tr>
-
           </thead>
 
-          <tbody>            
+          <tbody>
             {detalle.length === 0 ? (
-
               <tr>
-
                 <td
-                  colSpan={4}
-                  className="text-center p-8 text-gray-400"
+                  colSpan={5}
+                  className="p-8 text-center text-slate-400"
                 >
-
-                  Seleccione un artículo, indique la cantidad y presione "Agregar al préstamo".
-
+                  Seleccione un artículo, indique
+                  la cantidad y presione “Agregar al
+                  préstamo”.
                 </td>
-
               </tr>
-
             ) : (
-
               detalle.map((item) => (
-
                 <tr
                   key={item.articulo_id}
-                  className="border-t hover:bg-slate-50"
+                  className="border-t border-slate-200 transition hover:bg-slate-50"
                 >
-
-                  <td className="p-4 font-medium">
+                  <td className="break-words p-4 font-medium">
                     {item.codigo}
                   </td>
 
-                  <td className="p-4">
+                  <td className="break-words p-4">
                     {item.nombre}
                   </td>
 
-                  <td className="text-center p-4">
+                  <td className="p-4 text-center">
+                    {item.disponibles}
+                  </td>
+
+                  <td className="p-4 text-center font-semibold">
                     {item.cantidad}
                   </td>
 
-                  <td className="text-center p-4">
-
+                  <td className="p-4 text-center">
                     <button
                       type="button"
                       onClick={() =>
-                        eliminarArticulo(item.articulo_id)
+                        eliminarArticulo(
+                          item.articulo_id,
+                        )
                       }
                       className="
-                        bg-red-500
-                        hover:bg-red-600
-                        text-white
-                        px-4
-                        py-2
-                        rounded-xl
-                        transition
+                        min-h-11 rounded-xl
+                        bg-red-500 px-4 py-2
+                        font-semibold text-white
+                        transition hover:bg-red-600
                       "
                     >
                       Eliminar
                     </button>
-
                   </td>
-
                 </tr>
-
               ))
-
             )}
-
           </tbody>
-
         </table>
-
       </div>
 
-      <div className="flex justify-between items-center mt-6">
+      {/* Tarjetas móvil */}
+      <div className="mt-6 space-y-3 sm:hidden">
+        {detalle.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-400">
+            Seleccione un artículo, indique la cantidad
+            y agréguelo al préstamo.
+          </div>
+        ) : (
+          detalle.map((item) => (
+            <article
+              key={item.articulo_id}
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                {item.codigo}
+              </p>
 
+              <h4 className="mt-1 font-bold text-slate-800">
+                {item.nombre}
+              </h4>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-slate-400">
+                    Disponibles
+                  </p>
+
+                  <p className="font-bold text-slate-800">
+                    {item.disponibles}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-slate-400">
+                    Cantidad
+                  </p>
+
+                  <p className="font-bold text-slate-800">
+                    {item.cantidad}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  eliminarArticulo(
+                    item.articulo_id,
+                  )
+                }
+                className="mt-4 min-h-12 w-full rounded-2xl bg-red-500 px-4 py-3 font-semibold text-white transition hover:bg-red-600"
+              >
+                Eliminar artículo
+              </button>
+            </article>
+          ))
+        )}
+      </div>
+
+      {/* Resumen y acciones */}
+      <div className="mt-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-
-          <p className="text-gray-500">
-
-            Total de artículos:
-
-            <span className="font-bold text-blue-600 ml-2">
-
-              {totalArticulos}
-
+          <p className="text-slate-500">
+            Total de unidades:
+            <span className="ml-2 font-bold text-blue-600">
+              {totalUnidades}
             </span>
-
           </p>
 
-          <p className="text-sm text-gray-400">
-
-            {detalle.length} artículo(s) diferentes
-
+          <p className="text-sm text-slate-400">
+            {detalle.length} artículo(s)
+            diferentes
           </p>
+        </div>
 
-        </div>        <div className="flex gap-3">
-
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
-            onClick={() => {
-
-              setResponsable("");
-              setMatrimonioId("");
-              setSolicitante("");
-              setTelefono("");
-              setCorreo("");
-              setMinisterio("");
-              setTipoEvento("");
-              setEvento("");
-              setLugar("");
-              setFechaDevolucion("");
-              setObservaciones("");
-
-              setArticuloSeleccionado("");
-              setCantidadArticulo(1);
-              setDetalle([]);
-
-              obtenerFolio();
-
-            }}
+            onClick={limpiarFormulario}
+            disabled={guardando}
             className="
-              bg-gray-200
-              hover:bg-gray-300
-              text-slate-700
-              font-medium
-              px-6
-              py-3
-              rounded-xl
-              transition
+              min-h-12 rounded-2xl
+              bg-slate-200 px-6 py-3
+              font-semibold text-slate-700
+              transition hover:bg-slate-300
+              disabled:cursor-not-allowed
+              disabled:opacity-60
             "
           >
             Limpiar
@@ -842,31 +977,27 @@ setMinisterio("");
           <button
             type="button"
             disabled={guardando}
-            onClick={guardarPrestamo}
+            onClick={() => {
+              void guardarPrestamo();
+            }}
             className="
-              bg-[#3483FA]
+              min-h-12 rounded-2xl
+              bg-[#3483FA] px-8 py-3
+              font-semibold text-white
+              shadow-sm transition
+              hover:-translate-y-0.5
               hover:bg-[#2968C8]
-              disabled:bg-gray-400
-              text-white
-              font-medium
-              px-8
-              py-3
-              rounded-xl
-              shadow-sm
-              transition
+              hover:shadow-md
+              disabled:cursor-not-allowed
+              disabled:bg-slate-400
             "
           >
             {guardando
               ? "Guardando..."
               : "Guardar préstamo"}
           </button>
-
         </div>
-
       </div>
-
     </div>
-
   );
-
 }

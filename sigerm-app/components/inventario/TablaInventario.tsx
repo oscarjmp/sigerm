@@ -8,16 +8,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { PERMISOS } from "@/lib/permissions/permissions";
 import { supabase } from "@/lib/supabase/client";
+import type { ArticuloInventario } from "@/components/inventario/types";
 
-export type ArticuloInventario = {
-  id: string;
-  codigo: string;
-  nombre: string;
-  categoria: string | null;
-  cantidad: number | null;
-  estado: string | null;
-  imagen: string | null;
-};
 
 type Props = {
   articulos: ArticuloInventario[];

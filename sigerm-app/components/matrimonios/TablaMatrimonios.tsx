@@ -1,605 +1,1188 @@
-'use client';
+"use client";
 
-import React, { useState } from "react";
+import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import {
+  Grid2X2,
+  List,
+  LockKeyhole,
+  Mail,
+  Pencil,
+  Phone,
+  Search,
+  Trash2,
+  Users,
+} from "lucide-react";
 
-import MatrimonioModal from "./MatrimonioModal";
+import MatrimonioModal from "@/components/matrimonios/MatrimonioModal";
+import MatrimoniosCards from "@/components/matrimonios/MatrimoniosCards";
+
+import { supabase } from "@/lib/supabase/client";
 
 import type { Matrimonio } from "@/types/matrimonio";
 
-
-
-type Props = {
+type TablaMatrimoniosProps = {
   matrimonios: Matrimonio[];
+  usuarioActualId: string | null;
+  esAdministrador: boolean;
 };
+
+type VistaMatrimonios = "album" | "tabla";
+
+type FotoMatrimonioProps = {
+  matrimonio: Matrimonio;
+  variante: "escritorio" | "movil";
+};
+
+type FragmentMinisterioProps = {
+  ministerio: string;
+  lista: Matrimonio[];
+  eliminandoId: string | null;
+  usuarioActualId: string | null;
+  esAdministrador: boolean;
+  onEliminar: (
+    matrimonio: Matrimonio,
+  ) => Promise<void>;
+};
+
+type EncabezadoMinisterioProps = {
+  ministerio: string;
+  cantidad: number;
+};
+
+type BadgeMinisterioProps = {
+  children: string;
+};
+
+type DatoContactoProps = {
+  icono: ReactNode;
+  etiqueta: string;
+  valor: string;
+  ajustarTexto?: boolean;
+};
+
+function normalizarTexto(
+  valor: string | null | undefined,
+): string {
+  return (valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function obtenerMinisterio(
+  ministerio: string | null | undefined,
+): string {
+  return ministerio?.trim() || "SIN MINISTERIO";
+}
+
+function obtenerIniciales(
+  esposo: string,
+  esposa: string,
+): string {
+  const inicialEsposo =
+    esposo.trim().charAt(0).toUpperCase();
+
+  const inicialEsposa =
+    esposa.trim().charAt(0).toUpperCase();
+
+  return (
+    `${inicialEsposo}${inicialEsposa}` || "MR"
+  );
+}
+
+function puedeAdministrarMatrimonio(
+  matrimonio: Matrimonio,
+  usuarioActualId: string | null,
+  esAdministrador: boolean,
+): boolean {
+  if (esAdministrador) {
+    return true;
+  }
+
+  if (!usuarioActualId) {
+    return false;
+  }
+
+  return (
+    matrimonio.usuario_id === usuarioActualId
+  );
+}
+
+function FotoMatrimonio({
+  matrimonio,
+  variante,
+}: FotoMatrimonioProps) {
+  const esMovil = variante === "movil";
+
+  if (esMovil) {
+    return (
+      <div
+        className="
+          group relative
+          aspect-[4/3]
+          w-full overflow-hidden
+          bg-slate-100
+        "
+      >
+        {matrimonio.foto ? (
+          <Image
+            src={matrimonio.foto}
+            alt={`Fotografía de ${matrimonio.esposo} y ${matrimonio.esposa}`}
+            fill
+            sizes="
+              (max-width: 640px) 100vw,
+              (max-width: 1024px) 50vw,
+              33vw
+            "
+            className="
+              object-cover object-center
+              transition-transform
+              duration-500
+              group-hover:scale-105
+            "
+          />
+        ) : (
+          <div
+            className="
+              flex h-full w-full
+              items-center justify-center
+              bg-gradient-to-br
+              from-blue-100
+              via-white
+              to-amber-100
+            "
+          >
+            <div
+              className="
+                flex h-24 w-24
+                items-center justify-center
+                rounded-full
+                bg-white/90
+                text-3xl font-black
+                text-slate-700
+                shadow-xl
+                backdrop-blur-sm
+              "
+            >
+              {obtenerIniciales(
+                matrimonio.esposo,
+                matrimonio.esposa,
+              )}
+            </div>
+          </div>
+        )}
+
+        <div
+          aria-hidden="true"
+          className="
+            pointer-events-none
+            absolute inset-0
+            bg-gradient-to-t
+            from-black/55
+            via-transparent
+            to-transparent
+          "
+        />
+
+        <div
+          className="
+            absolute inset-x-4 bottom-4
+            rounded-2xl
+            bg-white/90
+            px-4 py-3
+            shadow-lg
+            backdrop-blur-md
+          "
+        >
+          <p className="line-clamp-1 text-sm font-black text-slate-900">
+            {matrimonio.esposo}
+          </p>
+
+          <p className="mt-0.5 line-clamp-1 text-xs font-semibold text-slate-500">
+            y {matrimonio.esposa}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="
+        group relative
+        h-24 w-32 shrink-0
+        overflow-hidden
+        rounded-2xl
+        bg-slate-100
+        shadow-sm
+        ring-1 ring-slate-200
+      "
+    >
+      {matrimonio.foto ? (
+        <Image
+          src={matrimonio.foto}
+          alt={`Fotografía de ${matrimonio.esposo} y ${matrimonio.esposa}`}
+          fill
+          sizes="128px"
+          className="
+            object-cover object-center
+            transition-transform
+            duration-500
+            group-hover:scale-105
+          "
+        />
+      ) : (
+        <div
+          aria-label="Matrimonio sin fotografía"
+          className="
+            flex h-full w-full
+            items-center justify-center
+            bg-gradient-to-br
+            from-blue-100
+            via-white
+            to-amber-100
+            text-xl font-black
+            text-slate-700
+          "
+        >
+          {obtenerIniciales(
+            matrimonio.esposo,
+            matrimonio.esposa,
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TablaMatrimonios({
   matrimonios,
-}: Props) {
-
+  usuarioActualId,
+  esAdministrador,
+}: TablaMatrimoniosProps) {
   const router = useRouter();
 
-  const [busqueda, setBusqueda] = useState("");
+  const [vista, setVista] =
+    useState<VistaMatrimonios>("album");
 
-  const matrimoniosFiltrados = matrimonios.filter(
-    (matrimonio) => {
+  const [busqueda, setBusqueda] =
+    useState("");
 
-      const texto = busqueda.toLowerCase();
+  const [eliminandoId, setEliminandoId] =
+    useState<string | null>(null);
 
-      return (
+  const matrimoniosFiltrados = useMemo(() => {
+    const texto = normalizarTexto(busqueda);
 
-        matrimonio.esposo
-          .toLowerCase()
-          .includes(texto) ||
+    if (!texto) {
+      return matrimonios;
+    }
 
-        matrimonio.esposa
-          .toLowerCase()
-          .includes(texto) ||
+    return matrimonios.filter((matrimonio) => {
+      const campos = [
+        matrimonio.esposo,
+        matrimonio.esposa,
+        matrimonio.telefono,
+        matrimonio.email,
+        matrimonio.ministerio,
+      ];
 
-        (matrimonio.telefono ?? "")
-          .toLowerCase()
-          .includes(texto) ||
+      return campos.some((campo) =>
+        normalizarTexto(campo).includes(texto),
+      );
+    });
+  }, [busqueda, matrimonios]);
 
-        (matrimonio.email ?? "")
-          .toLowerCase()
-          .includes(texto) ||
-
-(matrimonio.ministerio ?? "")
-  .toLowerCase()
-  .includes(texto)
-
+  const matrimoniosAgrupados = useMemo(() => {
+    return matrimoniosFiltrados.reduce<
+      Record<string, Matrimonio[]>
+    >((grupos, matrimonio) => {
+      const ministerio = obtenerMinisterio(
+        matrimonio.ministerio,
       );
 
-    }
-  );
+      if (!grupos[ministerio]) {
+        grupos[ministerio] = [];
+      }
 
-  const matrimoniosAgrupados =
-    matrimoniosFiltrados.reduce(
+      grupos[ministerio].push(matrimonio);
 
-      (grupos, matrimonio) => {
-
-        const ministerio =
-          matrimonio.ministerio || "SIN MINISTERIO";
-
-        if (!grupos[ministerio]) {
-
-          grupos[ministerio] = [];
-
-        }
-
-        grupos[ministerio].push(matrimonio);
-
-        return grupos;
-
-      },
-
-      {} as Record<string, Matrimonio[]>
-
-    );
+      return grupos;
+    }, {});
+  }, [matrimoniosFiltrados]);
 
   async function eliminarMatrimonio(
-    id: string
+    matrimonio: Matrimonio,
   ) {
+    const autorizado =
+      puedeAdministrarMatrimonio(
+        matrimonio,
+        usuarioActualId,
+        esAdministrador,
+      );
 
-    if (
-      !confirm(
-        "¿Desea eliminar este matrimonio?"
-      )
-    ) {
+    if (!autorizado) {
+      window.alert(
+        "No cuenta con autorización para eliminar este matrimonio.",
+      );
       return;
     }
 
-    const { error } = await supabase
-      .from("matrimonios")
-      .delete()
-      .eq("id", id);
+    const confirmado = window.confirm(
+      `¿Desea eliminar el matrimonio "${matrimonio.esposo} y ${matrimonio.esposa}"?`,
+    );
 
-    if (error) {
-
-      alert(error.message);
-
+    if (!confirmado) {
       return;
-
     }
 
-    router.refresh();
+    setEliminandoId(matrimonio.id);
 
+    try {
+      const { error } = await supabase
+        .from("matrimonios")
+        .delete()
+        .eq("id", matrimonio.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      window.alert(
+        "Matrimonio eliminado correctamente.",
+      );
+
+      router.refresh();
+    } catch (error) {
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : "No fue posible eliminar el matrimonio.";
+
+      window.alert(mensaje);
+    } finally {
+      setEliminandoId(null);
+    }
   }
 
-  return (  <>
-
-    {/* Buscador */}
-
-    <div className="mb-5">
-
-      <input
-        type="text"
-        placeholder="🔍 Buscar por nombre, teléfono, correo o ministerio..."
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
+  return (
+    <>
+      <section
         className="
-          w-full
-          rounded-xl
-          border
-          border-gray-300
-          bg-white
-          px-4
-          py-3
+          mb-6 rounded-3xl
+          border border-slate-200
+          bg-white p-4
           shadow-sm
-          focus:outline-none
-          focus:ring-2
-          focus:ring-[#3483FA]
+          sm:p-5
         "
-      />
-
-    </div>
-
-    {/* Vista escritorio */}
-
-    <div className="bg-white rounded-xl shadow overflow-hidden">
-
-      <div className="hidden lg:block overflow-x-auto">
-
-        <table className="min-w-full">
-
-          <thead className="bg-slate-50 border-b border-slate-200">
-
-            <tr>
-
-              <th className="text-left px-5 py-3 text-xs uppercase tracking-wider font-medium text-slate-500">
-                Matrimonio
-              </th>
-
-              <th className="text-left px-5 py-3 text-xs uppercase tracking-wider font-medium text-slate-500">
-                Teléfono
-              </th>
-
-              <th className="text-left px-5 py-3 text-xs uppercase tracking-wider font-medium text-slate-500">
-                Correo
-              </th>
-
-              <th className="text-left px-5 py-3 text-xs uppercase tracking-wider font-medium text-slate-500">
-                Ministerio
-              </th>
-
-              <th className="text-center px-5 py-3 text-xs uppercase tracking-wider font-medium text-slate-500">
-                Acciones
-              </th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            {Object.entries(matrimoniosAgrupados).map(
-
-              ([ministerio, lista]) => (
-
-                <React.Fragment key={ministerio}>
-
-                  <tr className="bg-slate-50 border-y border-slate-200">
-
-                    <td
-                      colSpan={5}
-                      className="px-5 py-4"
-                    >
-
-                      <div className="flex items-center justify-between">
-
-                        <div>
-
-                          <p className="text-xs uppercase tracking-widest text-slate-500">
-
-                            Ministerio
-
-                          </p>
-
-                          <h2 className="text-lg font-medium text-slate-800">
-
-                            {ministerio}
-
-                          </h2>
-
-                        </div>
-
-                        <span
-                          className="
-                            bg-white
-                            border
-                            border-slate-200
-                            rounded-full
-                            px-3
-                            py-1
-                            text-sm
-                            text-slate-600
-                          "
-                        >
-
-                          {lista.length} matrimonio(s)
-
-                        </span>
-
-                      </div>
-
-                    </td>
-
-                  </tr>
-
-                  {lista.map((matrimonio) => (
-
-                    <tr
-                      key={matrimonio.id}
-                      className="
-                        border-b
-                        hover:bg-slate-50
-                        transition-colors
-                      "
-                    >
-
-                      <td className="px-5 py-4">
-
-                        <div className="flex items-center gap-3">
-
-                          <div
-  className="
-    w-12
-    h-12
-    rounded-full
-    overflow-hidden
-    bg-amber-100
-    shrink-0
-    border
-    border-slate-200
-  "
->
-  {matrimonio.foto ? (
-    <Image
-      src={matrimonio.foto}
-      alt={`${matrimonio.esposo} y ${matrimonio.esposa}`}
-      width={48}
-      height={48}
-      className="w-full h-full object-cover"
-    />
-  ) : (
-    <div className="w-full h-full flex items-center justify-center font-semibold text-slate-700">
-      {matrimonio.esposo.charAt(0)}
-      {matrimonio.esposa.charAt(0)}
-    </div>
-  )}
-</div>
-
-                          <span className="text-[15px] font-normal text-slate-800">
-
-                            {matrimonio.esposo} y {matrimonio.esposa}
-
-                          </span>
-
-                        </div>
-
-                      </td>
-
-                      <td className="px-5 py-4 text-slate-600">
-
-                        {matrimonio.telefono || "-"}
-
-                      </td>
-
-                      <td className="px-5 py-4 text-slate-600">
-
-                        {matrimonio.email || "-"}
-
-                      </td>
-
-                      <td className="px-5 py-4">
-
-                        <span
-                          className="
-                            inline-flex
-                            items-center
-                            rounded-full
-                            bg-slate-100
-                            border
-                            border-slate-200
-                            px-3
-                            py-1
-                            text-xs
-                            text-slate-600
-                          "
-                        >
-
-                          {matrimonio.ministerio}
-
-                        </span>
-
-                      </td>
-
-                      <td className="px-5 py-4">
-
-                        <div className="flex justify-center gap-2">
-
-                          <MatrimonioModal
-                            
-                            matrimonio={matrimonio}
-                            trigger={
-                              <button
-                                className="
-                                  bg-[#3483FA]
-                                  hover:bg-[#2968C8]
-                                  text-white
-                                  font-medium
-                                  px-3
-                                  py-2
-                                  text-sm
-                                  rounded-xl
-                                  shadow-sm
-                                  transition-all
-                                  duration-200
-                                "
-                              >
-                                Editar
-                              </button>
-                            }
-                          />
-
-                          <button
-                            onClick={() =>
-                              eliminarMatrimonio(matrimonio.id)
-                            }
-                            className="
-                              bg-red-500
-                              hover:bg-red-600
-                              text-white
-                              font-medium
-                              px-3
-                              py-2
-                              text-sm
-                              rounded-xl
-                              shadow-sm
-                              transition-all
-                              duration-200
-                            "
-                          >
-                            Eliminar
-                          </button>
-
-                        </div>
-
-                      </td>
-
-                    </tr>
-
-                  ))}
-
-                </React.Fragment>
-
-              )
-
-            )}
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </div>
-        {/* Vista móvil */}
-
-    <div className="lg:hidden space-y-4 mt-6">
-
-      {Object.entries(matrimoniosAgrupados).map(
-
-        ([ministerio, lista]) => (
-
-          <div key={ministerio}>
-
-            <div
+      >
+        <div
+          className="
+            flex flex-col gap-4
+            lg:flex-row
+            lg:items-end
+            lg:justify-between
+          "
+        >
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor="buscar-matrimonios"
+              className="mb-2 block text-sm font-semibold text-slate-700"
+            >
+              Buscar matrimonios
+            </label>
+
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="
+                  pointer-events-none
+                  absolute left-4 top-1/2
+                  h-5 w-5
+                  -translate-y-1/2
+                  text-slate-400
+                "
+              />
+
+              <input
+                id="buscar-matrimonios"
+                type="search"
+                autoComplete="off"
+                placeholder="Buscar por nombre, teléfono, correo o ministerio..."
+                value={busqueda}
+                onChange={(event) =>
+                  setBusqueda(event.target.value)
+                }
+                className="
+                  min-h-12 w-full
+                  rounded-2xl border
+                  border-slate-300
+                  bg-slate-50
+                  py-3 pl-12 pr-4
+                  text-sm text-slate-800
+                  outline-none
+                  transition
+                  placeholder:text-slate-400
+                  focus:border-[#3483FA]
+                  focus:bg-white
+                  focus:ring-4
+                  focus:ring-blue-100
+                "
+              />
+            </div>
+          </div>
+
+          <div
+            className="
+              inline-flex w-full
+              rounded-2xl
+              bg-slate-100 p-1
+              lg:w-auto
+            "
+          >
+            <button
+              type="button"
+              onClick={() => setVista("album")}
+              aria-pressed={vista === "album"}
+              className={`
+                inline-flex flex-1
+                items-center justify-center
+                gap-2 rounded-xl
+                px-5 py-2.5
+                text-sm font-bold
+                transition-all
+                lg:flex-none
+                ${
+                  vista === "album"
+                    ? "bg-white text-[#3483FA] shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }
+              `}
+            >
+              <Grid2X2
+                className="h-4 w-4"
+                aria-hidden="true"
+              />
+
+              Álbum visual
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setVista("tabla")}
+              aria-pressed={vista === "tabla"}
+              className={`
+                inline-flex flex-1
+                items-center justify-center
+                gap-2 rounded-xl
+                px-5 py-2.5
+                text-sm font-bold
+                transition-all
+                lg:flex-none
+                ${
+                  vista === "tabla"
+                    ? "bg-white text-[#3483FA] shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }
+              `}
+            >
+              <List
+                className="h-4 w-4"
+                aria-hidden="true"
+              />
+
+              Vista tabla
+            </button>
+          </div>
+        </div>
+
+        <div
+          className="
+            mt-3 flex flex-col
+            gap-2 text-sm
+            text-slate-500
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+          <p>
+            Mostrando{" "}
+            <span className="font-bold text-slate-900">
+              {matrimoniosFiltrados.length}
+            </span>{" "}
+            de{" "}
+            <span className="font-bold text-slate-900">
+              {matrimonios.length}
+            </span>{" "}
+            matrimonios
+          </p>
+
+          {busqueda && (
+            <button
+              type="button"
+              onClick={() => setBusqueda("")}
               className="
-                bg-slate-50
-                border
-                border-slate-200
-                rounded-xl
-                px-4
-                py-3
-                mb-3
-                flex
-                items-center
-                justify-between
+                min-h-11 text-left
+                font-semibold text-blue-600
+                transition
+                hover:text-blue-700
               "
             >
+              Limpiar búsqueda
+            </button>
+          )}
+        </div>
+      </section>
 
-              <div>
+      {vista === "album" && (
+        <MatrimoniosCards
+          matrimonios={matrimoniosFiltrados}
+          eliminandoId={eliminandoId}
+          usuarioActualId={usuarioActualId}
+          esAdministrador={esAdministrador}
+          onEliminar={eliminarMatrimonio}
+        />
+      )}
 
-                <p className="text-xs uppercase tracking-widest text-slate-500">
+      {vista === "tabla" && (
+        <>
+          <section
+            className="
+              hidden w-full overflow-hidden
+              rounded-3xl
+              border border-slate-200
+              bg-white shadow-sm
+              lg:block
+            "
+          >
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[33%]" />
+                <col className="w-[14%]" />
+                <col className="w-[21%]" />
+                <col className="w-[14%]" />
+                <col className="w-[18%]" />
+              </colgroup>
 
-                  Ministerio
-
-                </p>
-
-                <h3 className="font-medium text-slate-700">
-
-                  {ministerio}
-
-                </h3>
-
-              </div>
-
-              <span
+              <thead
                 className="
-                  bg-white
-                  border
-                  border-slate-200
-                  rounded-full
-                  px-3
-                  py-1
-                  text-xs
-                  text-slate-600
+                  bg-gradient-to-r
+                  from-slate-50
+                  via-white
+                  to-blue-50/40
                 "
               >
+                <tr>
+                  <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Matrimonio
+                  </th>
 
-                {lista.length}
+                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Teléfono
+                  </th>
 
-              </span>
+                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Correo
+                  </th>
 
-            </div>
+                  <th className="px-4 py-4 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Ministerio
+                  </th>
 
-            {lista.map((matrimonio) => (
+                  <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
 
-              <div
-                key={matrimonio.id}
-                className="
-                  bg-white
-                  rounded-2xl
-                  shadow-md
-                  p-5
-                  mb-4
-                "
-              >
+              <tbody>
+                {Object.entries(
+                  matrimoniosAgrupados,
+                ).map(([ministerio, lista]) => (
+                  <FragmentMinisterio
+                    key={ministerio}
+                    ministerio={ministerio}
+                    lista={lista}
+                    eliminandoId={eliminandoId}
+                    usuarioActualId={usuarioActualId}
+                    esAdministrador={esAdministrador}
+                    onEliminar={eliminarMatrimonio}
+                  />
+                ))}
+              </tbody>
+            </table>
 
-                <div className="flex gap-4">
+            {matrimoniosFiltrados.length ===
+              0 && <EstadoVacio />}
+          </section>
+
+          <section className="space-y-7 lg:hidden">
+            {Object.entries(
+              matrimoniosAgrupados,
+            ).map(([ministerio, lista]) => (
+              <div key={ministerio}>
+                <EncabezadoMinisterio
+                  ministerio={ministerio}
+                  cantidad={lista.length}
+                />
 
                 <div
-  className="
-    w-14
-    h-14
-    rounded-full
-    overflow-hidden
-    border
-    border-slate-200
-    bg-amber-100
-    shrink-0
-  "
->
-  {matrimonio.foto ? (
-    <Image
-      src={matrimonio.foto}
-      alt={`${matrimonio.esposo} y ${matrimonio.esposa}`}
-      width={56}
-      height={56}
-      className="w-full h-full object-cover"
-    />
-  ) : (
-    <div className="w-full h-full flex items-center justify-center font-semibold text-slate-700">
-      {matrimonio.esposo.charAt(0)}
-      {matrimonio.esposa.charAt(0)}
-    </div>
-  )}
-</div>
+                  className="
+                    mt-4 grid
+                    grid-cols-1 gap-5
+                    md:grid-cols-2
+                  "
+                >
+                  {lista.map((matrimonio) => {
+                    const eliminando =
+                      eliminandoId === matrimonio.id;
 
-                  <div className="flex-1">
+                    const puedeAdministrar =
+                      puedeAdministrarMatrimonio(
+                        matrimonio,
+                        usuarioActualId,
+                        esAdministrador,
+                      );
 
-                    <h3 className="text-base font-medium text-slate-800">
-
-                      {matrimonio.esposo} y {matrimonio.esposa}
-
-                    </h3>
-
-                    <p className="text-sm text-slate-500 mt-2">
-
-                      📞 {matrimonio.telefono || "-"}
-
-                    </p>
-
-                    <p className="text-sm text-slate-500">
-
-                      ✉ {matrimonio.email || "-"}
-
-                    </p>
-
-                    <div className="mt-3">
-
-                      <span
+                    return (
+                      <article
+                        key={matrimonio.id}
                         className="
-                          inline-flex
-                          rounded-full
-                          bg-slate-100
-                          border
-                          border-slate-200
-                          px-3
-                          py-1
-                          text-xs
-                          text-slate-600
+                          group flex h-full
+                          flex-col overflow-hidden
+                          rounded-3xl
+                          border border-slate-200
+                          bg-white shadow-sm
+                          transition-all
+                          duration-300
+                          hover:-translate-y-1
+                          hover:shadow-xl
                         "
                       >
+                        <FotoMatrimonio
+                          matrimonio={matrimonio}
+                          variante="movil"
+                        />
 
-                        {matrimonio.ministerio}
+                        <div className="flex flex-1 flex-col p-5 sm:p-6">
+                          <div className="space-y-3">
+                            <DatoContacto
+                              icono={
+                                <Phone className="h-4 w-4" />
+                              }
+                              etiqueta="Teléfono"
+                              valor={
+                                matrimonio.telefono ||
+                                "Sin teléfono"
+                              }
+                            />
 
-                      </span>
+                            <DatoContacto
+                              icono={
+                                <Mail className="h-4 w-4" />
+                              }
+                              etiqueta="Correo"
+                              valor={
+                                matrimonio.email ||
+                                "Sin correo"
+                              }
+                              ajustarTexto
+                            />
+                          </div>
 
-                    </div>
+                          <div className="mt-4">
+                            <BadgeMinisterio>
+                              {obtenerMinisterio(
+                                matrimonio.ministerio,
+                              )}
+                            </BadgeMinisterio>
+                          </div>
 
-                  </div>
+                          {puedeAdministrar ? (
+                            <div
+                              className="
+                                mt-auto grid
+                                grid-cols-1 gap-3
+                                pt-6
+                                sm:grid-cols-2
+                              "
+                            >
+                              <MatrimonioModal
+                                matrimonio={matrimonio}
+                                trigger={
+                                  <button
+                                    type="button"
+                                    className="
+                                      inline-flex min-h-12
+                                      w-full items-center
+                                      justify-center gap-2
+                                      rounded-2xl
+                                      bg-[#3483FA]
+                                      px-5 py-3
+                                      text-sm font-bold
+                                      text-white shadow-sm
+                                      transition-all
+                                      duration-300
+                                      hover:-translate-y-0.5
+                                      hover:bg-[#2968C8]
+                                      hover:shadow-md
+                                    "
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    Editar
+                                  </button>
+                                }
+                              />
 
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  eliminarMatrimonio(
+                                    matrimonio,
+                                  )
+                                }
+                                disabled={eliminando}
+                                className="
+                                  inline-flex min-h-12
+                                  w-full items-center
+                                  justify-center gap-2
+                                  rounded-2xl
+                                  bg-red-500
+                                  px-5 py-3
+                                  text-sm font-bold
+                                  text-white shadow-sm
+                                  transition-all
+                                  duration-300
+                                  hover:-translate-y-0.5
+                                  hover:bg-red-600
+                                  hover:shadow-md
+                                  disabled:cursor-not-allowed
+                                  disabled:opacity-60
+                                "
+                              >
+                                <Trash2 className="h-4 w-4" />
+
+                                {eliminando
+                                  ? "Eliminando..."
+                                  : "Eliminar"}
+                              </button>
+                            </div>
+                          ) : (
+                            <SoloLectura />
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
+              </div>
+            ))}
 
-                <div className="grid grid-cols-2 gap-3 mt-5">
+            {matrimoniosFiltrados.length ===
+              0 && <EstadoVacio />}
+          </section>
+        </>
+      )}
+    </>
+  );
+}
 
+function FragmentMinisterio({
+  ministerio,
+  lista,
+  eliminandoId,
+  usuarioActualId,
+  esAdministrador,
+  onEliminar,
+}: FragmentMinisterioProps) {
+  return (
+    <>
+      <tr className="border-y border-slate-200 bg-slate-50">
+        <td colSpan={5} className="px-5 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p
+                className="
+                  text-xs font-semibold
+                  uppercase
+                  tracking-[0.16em]
+                  text-blue-600
+                "
+              >
+                Ministerio
+              </p>
+
+              <h2 className="mt-1 text-lg font-bold text-slate-800">
+                {ministerio}
+              </h2>
+            </div>
+
+            <span
+              className="
+                rounded-full border
+                border-slate-200
+                bg-white px-3 py-1
+                text-sm font-medium
+                text-slate-600
+                shadow-sm
+              "
+            >
+              {lista.length}{" "}
+              {lista.length === 1
+                ? "matrimonio"
+                : "matrimonios"}
+            </span>
+          </div>
+        </td>
+      </tr>
+
+      {lista.map((matrimonio) => {
+        const eliminando =
+          eliminandoId === matrimonio.id;
+
+        const puedeAdministrar =
+          puedeAdministrarMatrimonio(
+            matrimonio,
+            usuarioActualId,
+            esAdministrador,
+          );
+
+        return (
+          <tr
+            key={matrimonio.id}
+            className="
+              border-b border-slate-200
+              transition-all
+              duration-300
+              hover:bg-blue-50/60
+              hover:shadow-[inset_4px_0_0_#3483FA]
+            "
+          >
+            <td className="px-5 py-5 align-middle">
+              <div className="flex min-w-0 items-center gap-4">
+                <FotoMatrimonio
+                  matrimonio={matrimonio}
+                  variante="escritorio"
+                />
+
+                <div className="min-w-0">
+                  <h3
+                    className="
+                      truncate text-lg
+                      font-bold leading-tight
+                      text-slate-900
+                      xl:text-xl
+                    "
+                  >
+                    {matrimonio.esposo}
+                  </h3>
+
+                  <p
+                    className="
+                      mt-1 truncate
+                      text-sm font-semibold
+                      text-slate-500
+                      xl:text-base
+                    "
+                  >
+                    y {matrimonio.esposa}
+                  </p>
+                </div>
+              </div>
+            </td>
+
+            <td className="px-4 py-5 align-middle">
+              <DatoContacto
+                icono={
+                  <Phone className="h-4 w-4" />
+                }
+                etiqueta="Teléfono"
+                valor={
+                  matrimonio.telefono ||
+                  "Sin teléfono"
+                }
+              />
+            </td>
+
+            <td className="px-4 py-5 align-middle">
+              <DatoContacto
+                icono={
+                  <Mail className="h-4 w-4" />
+                }
+                etiqueta="Correo"
+                valor={
+                  matrimonio.email ||
+                  "Sin correo"
+                }
+                ajustarTexto
+              />
+            </td>
+
+            <td className="px-4 py-5 align-middle">
+              <BadgeMinisterio>
+                {obtenerMinisterio(
+                  matrimonio.ministerio,
+                )}
+              </BadgeMinisterio>
+            </td>
+
+            <td className="px-4 py-5 align-middle">
+              {puedeAdministrar ? (
+                <div className="flex flex-wrap justify-center gap-2">
                   <MatrimonioModal
                     matrimonio={matrimonio}
                     trigger={
-
                       <button
+                        type="button"
                         className="
+                          inline-flex min-h-11
+                          items-center
+                          justify-center gap-2
+                          rounded-2xl
                           bg-[#3483FA]
-                          hover:bg-[#2968C8]
-                          text-white
-                          rounded-xl
-                          py-3
-                          text-sm
-                          font-medium
+                          px-3 py-2
+                          text-sm font-semibold
+                          text-white shadow-sm
                           transition-all
-                          w-full
+                          duration-300
+                          hover:-translate-y-0.5
+                          hover:bg-[#2968C8]
+                          hover:shadow-md
                         "
                       >
+                        <Pencil className="h-4 w-4" />
 
-                        Editar
-
+                        <span className="hidden xl:inline">
+                          Editar
+                        </span>
                       </button>
-
                     }
                   />
 
                   <button
+                    type="button"
                     onClick={() =>
-                      eliminarMatrimonio(
-                        matrimonio.id
-                      )
+                      onEliminar(matrimonio)
                     }
+                    disabled={eliminando}
                     className="
+                      inline-flex min-h-11
+                      items-center justify-center
+                      gap-2 rounded-2xl
                       bg-red-500
-                      hover:bg-red-600
-                      text-white
-                      rounded-xl
-                      py-3
-                      text-sm
-                      font-medium
+                      px-3 py-2
+                      text-sm font-semibold
+                      text-white shadow-sm
                       transition-all
+                      duration-300
+                      hover:-translate-y-0.5
+                      hover:bg-red-600
+                      hover:shadow-md
+                      disabled:cursor-not-allowed
+                      disabled:opacity-60
                     "
                   >
+                    <Trash2 className="h-4 w-4" />
 
-                    Eliminar
-
+                    <span className="hidden 2xl:inline">
+                      {eliminando
+                        ? "Eliminando..."
+                        : "Eliminar"}
+                    </span>
                   </button>
-
                 </div>
+              ) : (
+                <SoloLectura compacto />
+              )}
+            </td>
+          </tr>
+        );
+      })}
+    </>
+  );
+}
 
-              </div>
+function EncabezadoMinisterio({
+  ministerio,
+  cantidad,
+}: EncabezadoMinisterioProps) {
+  return (
+    <div
+      className="
+        flex items-center
+        justify-between gap-4
+        rounded-2xl
+        border border-slate-200
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-blue-50/40
+        px-4 py-4
+        shadow-sm
+      "
+    >
+      <div>
+        <p
+          className="
+            text-xs font-semibold
+            uppercase
+            tracking-[0.16em]
+            text-blue-600
+          "
+        >
+          Ministerio
+        </p>
 
-            ))}
+        <h2 className="mt-1 font-bold text-slate-800">
+          {ministerio}
+        </h2>
+      </div>
 
-          </div>
-
-        )
-
-      )}
-
+      <span
+        className="
+          rounded-full
+          border border-slate-200
+          bg-white px-3 py-1
+          text-xs font-semibold
+          text-slate-600
+          shadow-sm
+        "
+      >
+        {cantidad}
+      </span>
     </div>
+  );
+}
 
-  </>
+function BadgeMinisterio({
+  children,
+}: BadgeMinisterioProps) {
+  return (
+    <span
+      className="
+        inline-flex max-w-full
+        items-center gap-2
+        rounded-full
+        border border-blue-100
+        bg-blue-50
+        px-3 py-1.5
+        text-xs font-semibold
+        text-blue-700
+      "
+    >
+      <Users className="h-3.5 w-3.5 shrink-0" />
 
-);
+      <span className="truncate">
+        {children}
+      </span>
+    </span>
+  );
+}
 
+function DatoContacto({
+  icono,
+  etiqueta,
+  valor,
+  ajustarTexto = false,
+}: DatoContactoProps) {
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <span
+        aria-hidden="true"
+        className="
+          mt-0.5 flex
+          h-8 w-8 shrink-0
+          items-center justify-center
+          rounded-xl
+          bg-slate-100
+          text-slate-500
+        "
+      >
+        {icono}
+      </span>
+
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-slate-400">
+          {etiqueta}
+        </p>
+
+        <p
+          title={valor}
+          className={`
+            mt-0.5 text-sm
+            font-medium text-slate-700
+            ${
+              ajustarTexto
+                ? "break-all"
+                : "break-words"
+            }
+          `}
+        >
+          {valor}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SoloLectura({
+  compacto = false,
+}: {
+  compacto?: boolean;
+}) {
+  return (
+    <div
+      className={`
+        inline-flex items-center
+        justify-center gap-2
+        rounded-2xl
+        bg-slate-100
+        text-slate-500
+        ${
+          compacto
+            ? "px-3 py-2 text-xs"
+            : "mt-auto w-full px-4 py-3 text-sm"
+        }
+      `}
+    >
+      <LockKeyhole
+        className="h-4 w-4 shrink-0"
+        aria-hidden="true"
+      />
+
+      <span className="font-semibold">
+        Solo lectura
+      </span>
+    </div>
+  );
+}
+
+function EstadoVacio() {
+  return (
+    <div className="p-10 text-center">
+      <div
+        className="
+          mx-auto flex h-16 w-16
+          items-center justify-center
+          rounded-full bg-slate-100
+        "
+      >
+        <Users className="h-7 w-7 text-slate-400" />
+      </div>
+
+      <h2 className="mt-4 text-lg font-bold text-slate-800">
+        No se encontraron matrimonios
+      </h2>
+
+      <p className="mt-2 text-sm text-slate-500">
+        Ajusta la búsqueda para consultar otros
+        registros.
+      </p>
+    </div>
+  );
 }

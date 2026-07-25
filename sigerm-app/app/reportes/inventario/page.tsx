@@ -12,6 +12,7 @@ type ArticuloReporte = {
   nombre: string;
   categoria: string | null;
   cantidad: number | null;
+  disponibles: number | null;
   estado: string | null;
   imagen: string | null;
 };
@@ -24,10 +25,10 @@ function obtenerCategoria(
   return categoriaLimpia || "SIN CATEGORÍA";
 }
 
-function obtenerCantidad(
-  cantidad: number | null,
+function obtenerNumero(
+  valor: number | null,
 ): number {
-  return cantidad ?? 0;
+  return valor ?? 0;
 }
 
 function obtenerClaseEstado(
@@ -59,6 +60,7 @@ export default async function ReporteInventario() {
       nombre,
       categoria,
       cantidad,
+      disponibles,
       estado,
       imagen
     `)
@@ -81,11 +83,21 @@ export default async function ReporteInventario() {
 
   const totalArticulos = articulos.length;
 
-  const totalExistencias = articulos.reduce(
+  const totalDisponibles = articulos.reduce(
     (total, articulo) =>
-      total + obtenerCantidad(articulo.cantidad),
+      total +
+      obtenerNumero(articulo.disponibles),
     0,
   );
+
+  const totalExistencias = articulos.reduce(
+    (total, articulo) =>
+      total + obtenerNumero(articulo.cantidad),
+    0,
+  );
+
+  const totalPrestados =
+    totalExistencias - totalDisponibles;
 
   const categorias = articulos.reduce<
     Record<string, ArticuloReporte[]>
@@ -135,6 +147,7 @@ export default async function ReporteInventario() {
       permiso={PERMISOS.VER_REPORTES}
     >
       <div className="min-h-screen bg-white p-4 md:p-10">
+        {/* Encabezado */}
         <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold md:text-4xl">
@@ -170,7 +183,8 @@ export default async function ReporteInventario() {
           </div>
         )}
 
-        <div className="mb-10 grid grid-cols-2 gap-4 md:gap-6 lg:grid-cols-4">
+        {/* Indicadores */}
+        <div className="mb-10 grid grid-cols-2 gap-4 md:gap-6 lg:grid-cols-5">
           <div className="rounded-xl border bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
               Categorías
@@ -193,12 +207,26 @@ export default async function ReporteInventario() {
 
           <div className="rounded-xl border bg-white p-5 shadow-sm">
             <p className="text-sm text-gray-500">
-              Existencias
+              Existencia total
             </p>
 
             <h3 className="mt-2 text-2xl font-bold text-slate-800 md:text-3xl">
               {totalExistencias}
             </h3>
+          </div>
+
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+            <p className="text-sm text-gray-500">
+              Disponibles
+            </p>
+
+            <h3 className="mt-2 text-2xl font-bold text-green-700 md:text-3xl">
+              {totalDisponibles}
+            </h3>
+
+            <p className="mt-1 text-xs text-gray-500">
+              {totalPrestados} unidad(es) prestada(s)
+            </p>
           </div>
 
           <div className="rounded-xl border bg-white p-5 shadow-sm">
@@ -220,15 +248,29 @@ export default async function ReporteInventario() {
         ) : (
           categoriasOrdenadas.map(
             ([categoria, lista]) => {
-              const totalCategoria =
+              const totalCategoriaExistencias =
                 lista.reduce(
                   (total, articulo) =>
                     total +
-                    obtenerCantidad(
+                    obtenerNumero(
                       articulo.cantidad,
                     ),
                   0,
                 );
+
+              const totalCategoriaDisponibles =
+                lista.reduce(
+                  (total, articulo) =>
+                    total +
+                    obtenerNumero(
+                      articulo.disponibles,
+                    ),
+                  0,
+                );
+
+              const totalCategoriaPrestados =
+                totalCategoriaExistencias -
+                totalCategoriaDisponibles;
 
               return (
                 <section
@@ -243,12 +285,14 @@ export default async function ReporteInventario() {
                     <p className="mt-1 text-sm text-gray-500">
                       {lista.length} artículo(s)
                       {" • "}
-                      {totalCategoria} existencia(s)
+                      {totalCategoriaDisponibles} disponible(s)
+                      {" • "}
+                      {totalCategoriaPrestados} prestado(s)
                     </p>
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="mb-8 w-full min-w-[700px] rounded-b-xl border border-gray-200">
+                    <table className="mb-8 w-full min-w-[850px] rounded-b-xl border border-gray-200">
                       <thead className="bg-gray-50 print:table-header-group">
                         <tr>
                           <th className="border p-3 text-center">
@@ -264,7 +308,15 @@ export default async function ReporteInventario() {
                           </th>
 
                           <th className="border p-3 text-center">
-                            Cantidad
+                            Existencia total
+                          </th>
+
+                          <th className="border p-3 text-center">
+                            Disponibles
+                          </th>
+
+                          <th className="border p-3 text-center">
+                            Prestados
                           </th>
 
                           <th className="border p-3 text-center">
@@ -274,53 +326,78 @@ export default async function ReporteInventario() {
                       </thead>
 
                       <tbody>
-                        {lista.map((articulo) => (
-                          <tr
-                            key={articulo.id}
-                            className="hover:bg-slate-50"
-                          >
-                            <td className="border p-3 text-center">
-                              {articulo.imagen ? (
-                                <Image
-                                  src={articulo.imagen}
-                                  alt={articulo.nombre}
-                                  width={64}
-                                  height={64}
-                                  className="mx-auto h-12 w-12 rounded-lg border object-cover md:h-16 md:w-16"
-                                />
-                              ) : (
-                                <span className="text-sm text-gray-400">
-                                  Sin imagen
-                                </span>
-                              )}
-                            </td>
+                        {lista.map((articulo) => {
+                          const existenciaTotal =
+                            obtenerNumero(
+                              articulo.cantidad,
+                            );
 
-                            <td className="border p-3">
-                              {articulo.codigo}
-                            </td>
+                          const disponibles =
+                            obtenerNumero(
+                              articulo.disponibles,
+                            );
 
-                            <td className="border p-3">
-                              {articulo.nombre}
-                            </td>
+                          const prestados =
+                            Math.max(
+                              existenciaTotal -
+                                disponibles,
+                              0,
+                            );
 
-                            <td className="border p-3 text-center">
-                              {obtenerCantidad(
-                                articulo.cantidad,
-                              )}
-                            </td>
-
-                            <td className="border p-3 text-center">
-                              <span
-                                className={obtenerClaseEstado(
-                                  articulo.estado,
+                          return (
+                            <tr
+                              key={articulo.id}
+                              className="hover:bg-slate-50"
+                            >
+                              <td className="border p-3 text-center">
+                                {articulo.imagen ? (
+                                  <Image
+                                    src={articulo.imagen}
+                                    alt={articulo.nombre}
+                                    width={64}
+                                    height={64}
+                                    className="mx-auto h-12 w-12 rounded-lg border object-cover md:h-16 md:w-16"
+                                  />
+                                ) : (
+                                  <span className="text-sm text-gray-400">
+                                    Sin imagen
+                                  </span>
                                 )}
-                              >
-                                {articulo.estado ??
-                                  "Sin estado"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+
+                              <td className="border p-3">
+                                {articulo.codigo}
+                              </td>
+
+                              <td className="border p-3">
+                                {articulo.nombre}
+                              </td>
+
+                              <td className="border p-3 text-center">
+                                {existenciaTotal}
+                              </td>
+
+                              <td className="border p-3 text-center font-bold text-green-700">
+                                {disponibles}
+                              </td>
+
+                              <td className="border p-3 text-center font-semibold text-amber-700">
+                                {prestados}
+                              </td>
+
+                              <td className="border p-3 text-center">
+                                <span
+                                  className={obtenerClaseEstado(
+                                    articulo.estado,
+                                  )}
+                                >
+                                  {articulo.estado ??
+                                    "Sin estado"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
 
                       <tfoot>
@@ -333,7 +410,15 @@ export default async function ReporteInventario() {
                           </td>
 
                           <td className="border p-3 text-center">
-                            {totalCategoria}
+                            {totalCategoriaExistencias}
+                          </td>
+
+                          <td className="border p-3 text-center text-green-700">
+                            {totalCategoriaDisponibles}
+                          </td>
+
+                          <td className="border p-3 text-center text-amber-700">
+                            {totalCategoriaPrestados}
                           </td>
 
                           <td className="border p-3" />
@@ -347,6 +432,7 @@ export default async function ReporteInventario() {
           )
         )}
 
+        {/* Totales finales */}
         <div className="mt-10 flex justify-end">
           <div className="text-right">
             <h3 className="text-xl font-bold md:text-2xl">
@@ -354,8 +440,15 @@ export default async function ReporteInventario() {
             </h3>
 
             <h3 className="mt-2 text-xl font-bold md:text-2xl">
-              Total de existencias:{" "}
-              {totalExistencias}
+              Existencia total: {totalExistencias}
+            </h3>
+
+            <h3 className="mt-2 text-xl font-bold text-green-700 md:text-2xl">
+              Disponibles actuales: {totalDisponibles}
+            </h3>
+
+            <h3 className="mt-2 text-xl font-bold text-amber-700 md:text-2xl">
+              Unidades prestadas: {totalPrestados}
             </h3>
           </div>
         </div>

@@ -2,7 +2,8 @@ export const PERMISOS = {
   VER_DASHBOARD: "ver_dashboard",
 
   VER_INVENTARIO: "ver_inventario",
-  CREAR_ARTICULO: "crear_articulo",
+VER_CATALOGO: "ver_catalogo",
+CREAR_ARTICULO: "crear_articulo",
   EDITAR_ARTICULO: "editar_articulo",
   DESACTIVAR_ARTICULO: "desactivar_articulo",
 
@@ -10,6 +11,8 @@ export const PERMISOS = {
   CREAR_PRESTAMO: "crear_prestamo",
   EDITAR_PRESTAMO: "editar_prestamo",
   REGISTRAR_DEVOLUCION: "registrar_devolucion",
+
+  VER_KARDEX: "ver_kardex",
 
   VER_ENCUENTROS: "ver_encuentros",
   CREAR_ENCUENTRO: "crear_encuentro",

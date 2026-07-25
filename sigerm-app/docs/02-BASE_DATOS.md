@@ -1,60 +1,110 @@
-# 02. Base de Datos
+# Base de Datos SIGERM
 
-## Objetivo
+## Motor
 
-Documentar la estructura completa de la base de datos de SIGERM como fuente oficial del proyecto.
+PostgreSQL administrado por Supabase.
 
-Este documento describe:
-
-- Tablas.
-- Columnas.
-- Tipos de datos.
-- Llaves primarias.
-- Llaves foráneas.
-- Restricciones.
-- Relaciones.
-- Reglas de negocio.
-- Flujo de información.
-
-Toda la información aquí documentada proviene del esquema real de Supabase del proyecto SIGERM.
 ---
 
-# Tabla: articulos
+# Tablas principales
 
-## Propósito
+## articulos
 
-Almacena el inventario general de artículos administrados por SIGERM.
+Almacena todos los artículos del inventario.
 
-## Llave primaria
+Campos principales
 
-| Campo | Tipo |
-|--------|------|
-| id | uuid |
+- id
+- codigo
+- nombre
+- categoria
+- descripcion
+- cantidad
+- estado
+- ubicacion
+- imagen
+- activo
+- created_at
 
-## Columnas
+---
 
-| Campo | Tipo | Nulo | Descripción |
-|--------|------|------|-------------|
-| id | uuid | No | Identificador único. |
-| codigo | varchar | Sí | Código interno del artículo. |
-| nombre | varchar | No | Nombre del artículo. |
-| categoria | varchar | Sí | Categoría del artículo. |
-| descripcion | text | Sí | Descripción del artículo. |
-| cantidad | integer | Sí | Existencia total. |
-| disponibles | integer | Sí | Existencia disponible. |
-| unidad | varchar | Sí | Unidad de medida. |
-| estado | varchar | Sí | Estado físico del artículo. |
-| ubicacion | varchar | Sí | Ubicación dentro del almacén. |
-| imagen | text | Sí | Ruta o URL de la imagen. |
-| activo | boolean | Sí | Indica si el artículo permanece activo. |
-| es_consumible | boolean | Sí | Define si disminuye definitivamente al utilizarse. |
-| created_at | timestamp | Sí | Fecha de creación del registro. |
+## prestamos
 
-## Relaciones
+Almacena cada préstamo realizado.
 
-La tabla **articulos** se relaciona con:
+Campos principales
 
-- detalle_prestamo
-- movimientos
+- id
+- folio
+- solicitante
+- responsable
+- fecha_prestamo
+- fecha_devolucion
+- estado
+- observaciones
 
-mediante el campo **articulo_id**.
+---
+
+## detalle_prestamo
+
+Relaciona los artículos con cada préstamo.
+
+Campos principales
+
+- id
+- prestamo_id
+- articulo_id
+- cantidad
+
+---
+
+## usuarios
+
+Almacena los usuarios del sistema.
+
+Campos principales
+
+- id
+- auth_id
+- nombre
+- apellido_paterno
+- apellido_materno
+- email
+- telefono
+- activo
+- rol_id
+
+---
+
+## roles
+
+Catálogo de roles del sistema.
+
+---
+
+# Relaciones
+
+usuarios
+↓
+
+roles
+
+prestamos
+↓
+
+detalle_prestamo
+
+detalle_prestamo
+↓
+
+articulos
+
+---
+
+# Seguridad
+
+Todas las tablas utilizan:
+
+- Row Level Security (RLS)
+- Políticas de acceso
+- Supabase Auth

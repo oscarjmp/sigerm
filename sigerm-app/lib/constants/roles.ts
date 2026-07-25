@@ -4,8 +4,11 @@ export const ROLES = {
   INVENTARIO: "Inventario",
   SECRETARIA: "Secretaría",
   TESORERIA: "Tesorería",
+  SOLICITANTE: "Solicitante",
 } as const;
 
-export type NombreRol = (typeof ROLES)[keyof typeof ROLES];
+export type NombreRol =
+  (typeof ROLES)[keyof typeof ROLES];
 
-export const TODOS_LOS_ROLES: NombreRol[] = Object.values(ROLES);
+export const TODOS_LOS_ROLES: NombreRol[] =
+  Object.values(ROLES);
