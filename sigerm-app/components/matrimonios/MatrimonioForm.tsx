@@ -1,66 +1,87 @@
 "use client";
 
-import { useEffect, useState, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import type {
+  ChangeEvent,
+  FormEvent,
+} from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import {
+  Camera,
+  LoaderCircle,
+  Mail,
+  MapPin,
+  Phone,
+  Save,
+  UserRound,
+  UsersRound,
+  X,
+} from "lucide-react";
+
+import NuevoMinisterioModal from "@/components/matrimonios/NuevoMinisterioModal";
+
+import { notificar } from "@/lib/notificaciones";
+import {
+  actualizarMatrimonio,
+  guardarMatrimonio,
+} from "@/lib/services/matrimonios";
+import { obtenerMinisterios } from "@/lib/services/ministerios";
 import { supabase } from "@/lib/supabase/client";
 import { subirImagen } from "@/lib/storage/imagenes";
-import { notificar } from "@/lib/notificaciones";
-
-import {
-  guardarMatrimonio,
-  actualizarMatrimonio,
-} from "@/lib/services/matrimonios";
-
-import {
-  obtenerMinisterios,
-} from "@/lib/services/ministerios";
 
 import type { Matrimonio } from "@/types/matrimonio";
-
-import NuevoMinisterioModal from "./NuevoMinisterioModal";
 
 type Props = {
   cerrar: () => void;
   matrimonio?: Matrimonio;
 };
 
+type Ministerio = {
+  id: string;
+  nombre: string;
+};
+
+function limpiarTelefono(valor: string): string {
+  return valor.replace(/\D/g, "").slice(0, 10);
+}
+
 export default function MatrimonioForm({
   cerrar,
   matrimonio,
 }: Props) {
-
   const router = useRouter();
 
   const [esposo, setEsposo] = useState(
-    matrimonio?.esposo ?? ""
+    matrimonio?.esposo ?? "",
   );
 
   const [esposa, setEsposa] = useState(
-    matrimonio?.esposa ?? ""
+    matrimonio?.esposa ?? "",
   );
 
   const [telefono, setTelefono] = useState(
-    matrimonio?.telefono ?? ""
+    matrimonio?.telefono ?? "",
   );
 
   const [email, setEmail] = useState(
-    matrimonio?.email ?? ""
+    matrimonio?.email ?? "",
   );
 
   const [direccion, setDireccion] = useState(
-    matrimonio?.direccion ?? ""
+    matrimonio?.direccion ?? "",
   );
 
   const [ministerio, setMinisterio] = useState(
-    matrimonio?.ministerio ?? ""
+    matrimonio?.ministerio ?? "",
   );
 
   const [ministerios, setMinisterios] = useState<
-    {
-      id: string;
-      nombre: string;
-    }[]
+    Ministerio[]
   >([]);
 
   const [
@@ -68,545 +89,706 @@ export default function MatrimonioForm({
     setMostrarNuevoMinisterio,
   ] = useState(false);
 
+  const [foto, setFoto] =
+    useState<File | null>(null);
+
+  const [preview, setPreview] = useState(
+    matrimonio?.foto ?? "",
+  );
+
   const [guardando, setGuardando] =
     useState(false);
 
-    const [foto, setFoto] = useState<File | null>(null);
+  const cargarMinisterios =
+    useCallback(async () => {
+      try {
+        const { data, error } =
+          await obtenerMinisterios();
 
-const [preview, setPreview] = useState(
-  matrimonio?.foto ?? ""
-);
-  async function cargarMinisterios() {
+        if (error) {
+          throw new Error(error.message);
+        }
 
-    const { data } =
-      await obtenerMinisterios();
+        setMinisterios(
+          (data ?? []) as Ministerio[],
+        );
+      } catch (error) {
+        console.error(
+          "Error al consultar ministerios:",
+          error,
+        );
 
-    if (data) {
-
-      setMinisterios(data);
-
-    }
-
-  }
+        notificar.error(
+          "No fue posible cargar los ministerios.",
+        );
+      }
+    }, []);
 
   useEffect(() => {
+    void cargarMinisterios();
+  }, [cargarMinisterios]);
 
-    cargarMinisterios();
+  /*
+   * Libera la URL temporal creada para la
+   * previsualización de la fotografía.
+   */
+  useEffect(() => {
+    return () => {
+      if (preview.startsWith("blob:")) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
 
-  }, []);
-function seleccionarFoto(
-  e: ChangeEvent<HTMLInputElement>
-) {
+  function seleccionarFoto(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const archivo = event.target.files?.[0];
 
-  const archivo = e.target.files?.[0];
+    if (!archivo) {
+      return;
+    }
 
-  if (!archivo) return;
+    if (!archivo.type.startsWith("image/")) {
+      notificar.advertencia(
+        "Seleccione un archivo de imagen válido.",
+      );
+      event.target.value = "";
+      return;
+    }
 
-  setFoto(archivo);
+    const limiteBytes = 5 * 1024 * 1024;
 
-  setPreview(URL.createObjectURL(archivo));
+    if (archivo.size > limiteBytes) {
+      notificar.advertencia(
+        "La fotografía no debe superar los 5 MB.",
+      );
+      event.target.value = "";
+      return;
+    }
 
-}
+    if (preview.startsWith("blob:")) {
+      URL.revokeObjectURL(preview);
+    }
+
+    setFoto(archivo);
+    setPreview(URL.createObjectURL(archivo));
+  }
+
+  async function obtenerUsuarioActualId(): Promise<
+    string | null
+  > {
+    const {
+      data: { user },
+      error: errorAutenticacion,
+    } = await supabase.auth.getUser();
+
+    if (errorAutenticacion) {
+      throw new Error(
+        errorAutenticacion.message,
+      );
+    }
+
+    if (!user) {
+      return null;
+    }
+
+    const {
+      data: usuario,
+      error: errorUsuario,
+    } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("auth_id", user.id)
+      .eq("activo", true)
+      .maybeSingle();
+
+    if (errorUsuario) {
+      throw new Error(errorUsuario.message);
+    }
+
+    return usuario?.id ?? null;
+  }
+
   async function guardar() {
+    const esposoLimpio = esposo.trim();
+    const esposaLimpia = esposa.trim();
+    const ministerioLimpio =
+      ministerio.trim();
 
-    if (!esposo.trim()) {
-
+    if (!esposoLimpio) {
       notificar.advertencia(
-        "Capture el nombre del esposo."
+        "Capture el nombre del esposo.",
+      );
+      return;
+    }
+
+    if (!esposaLimpia) {
+      notificar.advertencia(
+        "Capture el nombre de la esposa.",
+      );
+      return;
+    }
+
+    if (!ministerioLimpio) {
+      notificar.advertencia(
+        "Seleccione un ministerio.",
+      );
+      return;
+    }
+
+    const correoLimpio = email
+      .trim()
+      .toLowerCase();
+
+    if (
+      correoLimpio &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        correoLimpio,
+      )
+    ) {
+      notificar.advertencia(
+        "Capture un correo electrónico válido.",
+      );
+      return;
+    }
+
+    setGuardando(true);
+
+    try {
+      let fotoUrl =
+        matrimonio?.foto ?? null;
+
+      if (foto) {
+        fotoUrl = await subirImagen(
+          "matrimonios",
+          foto,
+        );
+      }
+
+      /*
+       * Al editar se conserva el propietario.
+       * Al crear se asigna el usuario conectado.
+       */
+      const usuarioId =
+        matrimonio?.usuario_id ??
+        (await obtenerUsuarioActualId());
+
+      if (!usuarioId && !matrimonio) {
+        throw new Error(
+          "No fue posible identificar al usuario que registrará el matrimonio.",
+        );
+      }
+
+      const datos = {
+        esposo:
+          esposoLimpio.toLocaleUpperCase(
+            "es-MX",
+          ),
+        esposa:
+          esposaLimpia.toLocaleUpperCase(
+            "es-MX",
+          ),
+        telefono: telefono.trim(),
+        email: correoLimpio,
+        direccion: direccion.trim(),
+        ministerio: ministerioLimpio,
+        foto: fotoUrl,
+        activo: matrimonio?.activo ?? true,
+        usuario_id: usuarioId,
+      };
+
+      const resultado = matrimonio
+        ? await actualizarMatrimonio(
+            matrimonio.id,
+            datos,
+          )
+        : await guardarMatrimonio(datos);
+
+      if (resultado.error) {
+        throw new Error(
+          resultado.error.message,
+        );
+      }
+
+      notificar.exito(
+        matrimonio
+          ? "Matrimonio actualizado correctamente."
+          : "Matrimonio registrado correctamente.",
       );
 
-      return;
-
-    }
-
-    if (!esposa.trim()) {
-
-      notificar.advertencia(
-        "Capture el nombre de la esposa."
+      cerrar();
+      router.refresh();
+    } catch (error) {
+      console.error(
+        "Error al guardar el matrimonio:",
+        error,
       );
 
-      return;
+      const mensaje =
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar el matrimonio.";
 
+      notificar.error(mensaje);
+    } finally {
+      setGuardando(false);
     }
+  }
 
-    if (!ministerio) {
-
-      notificar.advertencia(
-        "Seleccione un ministerio."
-      );
-
-      return;
-
-    }
-
-setGuardando(true);
-
-let error;
-
-let fotoUrl = matrimonio?.foto ?? null;
-
-if (foto) {
-
-  try {
-
-    fotoUrl = await subirImagen(
-      "matrimonios",
-      foto
-    );
-
-  } catch (e: any) {
-
-  console.error(e);
-
-  notificar.error(
-    e.message ?? "No fue posible subir la fotografía."
-  );
-
-  setGuardando(false);
-
-  return;
-
-}
-
-}
-
-const datos = {
-
-  esposo: esposo.toUpperCase(),
-
-  esposa: esposa.toUpperCase(),
-
-  telefono,
-
-  email,
-
-  direccion,
-
-  ministerio,
-
-  foto: fotoUrl,
-
-  activo: true,
-
-};
-    if (matrimonio) {
-
-      ({ error } =
-        await actualizarMatrimonio(
-          matrimonio.id,
-          datos
-        ));
-
-    } else {
-
-      ({ error } =
-        await guardarMatrimonio(
-          datos
-        ));
-
-    }
-
-    setGuardando(false);
-
-    if (error) {
-
-      notificar.error(error.message);
-
-      return;
-
-    }
-
-    notificar.exito(
-
-      matrimonio
-        ? "Matrimonio actualizado correctamente."
-        : "Matrimonio registrado correctamente."
-
-    );
-
-    cerrar();
-
-    router.refresh();
-
+  function enviarFormulario(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    void guardar();
   }
 
   return (
     <>
-  <form
-    onSubmit={(e) => {
-
-      e.preventDefault();
-
-      guardar();
-
-    }}
-    className="space-y-6"
-  >
-{/* Fotografía */}
-
-<div className="flex flex-col items-center gap-4">
-
-  <label className="text-lg font-semibold text-slate-700">
-    Fotografía del matrimonio
-  </label>
-
-  <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-slate-200 bg-slate-100 flex items-center justify-center">
-
-    {preview ? (
-
-      <Image
-        src={preview}
-        alt="Fotografía"
-        width={160}
-        height={160}
-        className="w-full h-full object-cover"
-      />
-
-    ) : (
-
-      <div className="text-5xl">
-        👥
-      </div>
-
-    )}
-
-  </div>
-
-  <label
-    htmlFor="foto"
-    className="
-      cursor-pointer
-      bg-[#3483FA]
-      hover:bg-[#2968C8]
-      text-white
-      px-5
-      py-2
-      rounded-xl
-      shadow
-      transition-all
-    "
-  >
-    📷 Seleccionar fotografía
-  </label>
-
-  <input
-    id="foto"
-    type="file"
-    accept="image/*"
-    onChange={seleccionarFoto}
-    className="hidden"
-  />
-
-</div>
-    {/* Primera fila */}
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <div>
-
-        <label className="block mb-2 font-medium text-slate-700">
-          Nombre del esposo *
-        </label>
-
-        <input
-          type="text"
-          value={esposo}
-          onChange={(e) =>
-            setEsposo(
-              e.target.value.toUpperCase()
-            )
-          }
-          placeholder="Nombre del esposo"
-          className="
-            w-full
-            rounded-xl
-            border
-            border-gray-300
-            px-4
-            py-3
-            focus:outline-none
-            focus:ring-2
-            focus:ring-[#3483FA]
-            transition-all
-          "
-        />
-
-      </div>
-
-      <div>
-
-        <label className="block mb-2 font-medium text-slate-700">
-          Nombre de la esposa *
-        </label>
-
-        <input
-          type="text"
-          value={esposa}
-          onChange={(e) =>
-            setEsposa(
-              e.target.value.toUpperCase()
-            )
-          }
-          placeholder="Nombre de la esposa"
-          className="
-            w-full
-            rounded-xl
-            border
-            border-gray-300
-            px-4
-            py-3
-            focus:outline-none
-            focus:ring-2
-            focus:ring-[#3483FA]
-            transition-all
-          "
-        />
-
-      </div>
-
-    </div>
-
-    {/* Segunda fila */}
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <div>
-
-        <label className="block mb-2 font-medium text-slate-700">
-          Teléfono
-        </label>
-
-        <input
-          type="tel"
-          value={telefono}
-          maxLength={10}
-          onChange={(e) =>
-            setTelefono(e.target.value)
-          }
-          placeholder="2461234567"
-          className="
-            w-full
-            rounded-xl
-            border
-            border-gray-300
-            px-4
-            py-3
-            focus:outline-none
-            focus:ring-2
-            focus:ring-[#3483FA]
-            transition-all
-          "
-        />
-
-      </div>
-
-      <div>
-
-        <label className="block mb-2 font-medium text-slate-700">
-          Correo electrónico
-        </label>
-
-        <input
-          type="email"
-          value={email}
-          onChange={(e) =>
-            setEmail(e.target.value)
-          }
-          placeholder="correo@ejemplo.com"
-          className="
-            w-full
-            rounded-xl
-            border
-            border-gray-300
-            px-4
-            py-3
-            focus:outline-none
-            focus:ring-2
-            focus:ring-[#3483FA]
-            transition-all
-          "
-        />
-
-      </div>
-
-    </div>
-
-       {/* Dirección */}
-
-    <div>
-
-      <label className="block mb-2 font-medium text-slate-700">
-        Dirección
-      </label>
-
-      <textarea
-        rows={4}
-        value={direccion}
-        onChange={(e) =>
-          setDireccion(e.target.value)
-        }
-        placeholder="Dirección completa"
-        className="
-          w-full
-          rounded-xl
-          border
-          border-gray-300
-          px-4
-          py-3
-          resize-none
-          focus:outline-none
-          focus:ring-2
-          focus:ring-[#3483FA]
-          transition-all
-        "
-      />
-
-    </div>
-
-    {/* Ministerio */}
-
-    <div>
-
-      <label className="block mb-2 font-medium text-slate-700">
-        Ministerio *
-      </label>
-
-      <select
-        value={ministerio}
-        onChange={(e) => {
-
-          const valor = e.target.value;
-
-          if (valor === "__NUEVO__") {
-
-            setMostrarNuevoMinisterio(true);
-
-            return;
-
-          }
-
-          setMinisterio(valor);
-
-        }}
-        className="
-          w-full
-          rounded-xl
-          border
-          border-gray-300
-          px-4
-          py-3
-          focus:outline-none
-          focus:ring-2
-          focus:ring-[#3483FA]
-          transition-all
-        "
+      <form
+        onSubmit={enviarFormulario}
+        className="space-y-6"
       >
+        {/* Fotografía */}
+        <section
+          className="
+            rounded-3xl border
+            border-slate-200
+            bg-gradient-to-br
+            from-slate-50
+            via-white
+            to-blue-50/50
+            p-5
+          "
+        >
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-center">
+              <h3 className="text-base font-black text-slate-800">
+                Fotografía del matrimonio
+              </h3>
 
-        <option value="">
-          Seleccione un ministerio...
-        </option>
+              <p className="mt-1 text-xs text-slate-500">
+                Formatos de imagen de hasta 5 MB.
+              </p>
+            </div>
 
-        {ministerios.map((m) => (
+            <div
+              className="
+                relative h-40 w-40
+                overflow-hidden
+                rounded-full
+                border-4 border-white
+                bg-slate-100
+                shadow-xl
+                ring-1 ring-slate-200
+              "
+            >
+              {preview ? (
+                <Image
+                  src={preview}
+                  alt={`Fotografía de ${
+                    esposo || "esposo"
+                  } y ${
+                    esposa || "esposa"
+                  }`}
+                  fill
+                  sizes="160px"
+                  className="object-cover object-center"
+                />
+              ) : (
+                <div
+                  className="
+                    flex h-full w-full
+                    items-center justify-center
+                    bg-gradient-to-br
+                    from-blue-100
+                    via-white
+                    to-amber-100
+                  "
+                >
+                  <UsersRound
+                    aria-hidden="true"
+                    className="h-14 w-14 text-slate-400"
+                  />
+                </div>
+              )}
+            </div>
 
-          <option
-            key={m.id}
-            value={m.nombre}
+            <label
+              htmlFor="foto-matrimonio"
+              className="
+                inline-flex min-h-11
+                cursor-pointer items-center
+                justify-center gap-2
+                rounded-2xl
+                bg-gradient-to-r
+                from-[#2968F2]
+                to-[#3483FA]
+                px-5 py-3
+                text-sm font-bold
+                text-white
+                shadow-md
+                transition-all duration-300
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              <Camera
+                aria-hidden="true"
+                className="h-5 w-5"
+              />
+
+              Seleccionar fotografía
+            </label>
+
+            <input
+              id="foto-matrimonio"
+              type="file"
+              accept="image/*"
+              onChange={seleccionarFoto}
+              disabled={guardando}
+              className="hidden"
+            />
+          </div>
+        </section>
+
+        {/* Nombres */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <CampoFormulario
+            id="nombre-esposo"
+            etiqueta="Nombre del esposo"
+            icono={
+              <UserRound className="h-5 w-5" />
+            }
+            requerido
           >
-            {m.nombre}
-          </option>
+            <input
+              id="nombre-esposo"
+              type="text"
+              value={esposo}
+              onChange={(event) =>
+                setEsposo(
+                  event.target.value.toLocaleUpperCase(
+                    "es-MX",
+                  ),
+                )
+              }
+              disabled={guardando}
+              placeholder="NOMBRE DEL ESPOSO"
+              required
+              className={claseCampo}
+            />
+          </CampoFormulario>
 
-        ))}
+          <CampoFormulario
+            id="nombre-esposa"
+            etiqueta="Nombre de la esposa"
+            icono={
+              <UserRound className="h-5 w-5" />
+            }
+            requerido
+          >
+            <input
+              id="nombre-esposa"
+              type="text"
+              value={esposa}
+              onChange={(event) =>
+                setEsposa(
+                  event.target.value.toLocaleUpperCase(
+                    "es-MX",
+                  ),
+                )
+              }
+              disabled={guardando}
+              placeholder="NOMBRE DE LA ESPOSA"
+              required
+              className={claseCampo}
+            />
+          </CampoFormulario>
+        </div>
 
-        <option value="__NUEVO__">
-          ➕ Agregar nuevo ministerio...
-        </option>
+        {/* Contacto */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <CampoFormulario
+            id="telefono-matrimonio"
+            etiqueta="Teléfono"
+            icono={
+              <Phone className="h-5 w-5" />
+            }
+          >
+            <input
+              id="telefono-matrimonio"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              value={telefono}
+              maxLength={10}
+              onChange={(event) =>
+                setTelefono(
+                  limpiarTelefono(
+                    event.target.value,
+                  ),
+                )
+              }
+              disabled={guardando}
+              placeholder="2461234567"
+              className={claseCampo}
+            />
+          </CampoFormulario>
 
-      </select>
+          <CampoFormulario
+            id="correo-matrimonio"
+            etiqueta="Correo electrónico"
+            icono={
+              <Mail className="h-5 w-5" />
+            }
+          >
+            <input
+              id="correo-matrimonio"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
+              disabled={guardando}
+              placeholder="correo@ejemplo.com"
+              className={claseCampo}
+            />
+          </CampoFormulario>
+        </div>
 
-    </div>
+        {/* Dirección */}
+        <CampoFormulario
+          id="direccion-matrimonio"
+          etiqueta="Dirección"
+          icono={
+            <MapPin className="h-5 w-5" />
+          }
+        >
+          <textarea
+            id="direccion-matrimonio"
+            rows={4}
+            value={direccion}
+            onChange={(event) =>
+              setDireccion(event.target.value)
+            }
+            disabled={guardando}
+            placeholder="Dirección completa"
+            className={`${claseCampo} resize-none`}
+          />
+        </CampoFormulario>
 
-    {/* Botones */}
+        {/* Ministerio */}
+        <CampoFormulario
+          id="ministerio-matrimonio"
+          etiqueta="Ministerio"
+          icono={
+            <UsersRound className="h-5 w-5" />
+          }
+          requerido
+        >
+          <select
+            id="ministerio-matrimonio"
+            value={ministerio}
+            disabled={guardando}
+            required
+            onChange={(event) => {
+              const valor = event.target.value;
 
-    <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
+              if (valor === "__NUEVO__") {
+                setMostrarNuevoMinisterio(
+                  true,
+                );
+                return;
+              }
 
-      <button
-        type="button"
-        disabled={guardando}
-        onClick={() => {
+              setMinisterio(valor);
+            }}
+            className={claseCampo}
+          >
+            <option value="">
+              Seleccione un ministerio...
+            </option>
 
-          if (guardando) return;
+            {ministerios.map(
+              (ministerioItem) => (
+                <option
+                  key={ministerioItem.id}
+                  value={
+                    ministerioItem.nombre
+                  }
+                >
+                  {ministerioItem.nombre}
+                </option>
+              ),
+            )}
 
-          cerrar();
+            <option value="__NUEVO__">
+              ➕ Agregar nuevo ministerio...
+            </option>
+          </select>
+        </CampoFormulario>
 
+        {/* Acciones */}
+        <div
+          className="
+            flex flex-col-reverse
+            justify-end gap-3
+            border-t border-slate-100
+            pt-5
+            sm:flex-row
+          "
+        >
+          <button
+            type="button"
+            disabled={guardando}
+            onClick={cerrar}
+            className="
+              inline-flex min-h-12
+              items-center justify-center
+              gap-2 rounded-2xl
+              border border-slate-200
+              bg-white px-6 py-3
+              text-sm font-bold
+              text-slate-700
+              shadow-sm
+              transition-all
+              hover:border-slate-300
+              hover:bg-slate-50
+              disabled:cursor-not-allowed
+              disabled:opacity-60
+            "
+          >
+            <X
+              aria-hidden="true"
+              className="h-5 w-5"
+            />
+
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            disabled={guardando}
+            className="
+              inline-flex min-h-12
+              items-center justify-center
+              gap-2 rounded-2xl
+              bg-gradient-to-r
+              from-[#2968F2]
+              to-[#3483FA]
+              px-6 py-3
+              text-sm font-black
+              text-white
+              shadow-[0_12px_28px_rgba(52,131,250,0.28)]
+              transition-all
+              duration-300
+              hover:-translate-y-0.5
+              hover:shadow-[0_17px_38px_rgba(52,131,250,0.36)]
+              disabled:cursor-not-allowed
+              disabled:opacity-60
+              disabled:hover:translate-y-0
+            "
+          >
+            {guardando ? (
+              <LoaderCircle
+                aria-hidden="true"
+                className="h-5 w-5 animate-spin"
+              />
+            ) : (
+              <Save
+                aria-hidden="true"
+                className="h-5 w-5"
+              />
+            )}
+
+            {guardando
+              ? "Guardando..."
+              : matrimonio
+                ? "Actualizar matrimonio"
+                : "Guardar matrimonio"}
+          </button>
+        </div>
+      </form>
+
+      <NuevoMinisterioModal
+        open={mostrarNuevoMinisterio}
+        onClose={() =>
+          setMostrarNuevoMinisterio(false)
+        }
+        onGuardado={async (nombre) => {
+          await cargarMinisterios();
+          setMinisterio(nombre);
+
+          setMostrarNuevoMinisterio(false);
         }}
+      />
+    </>
+  );
+}
+
+const claseCampo = `
+  min-h-12 w-full
+  rounded-2xl border
+  border-slate-300
+  bg-slate-50
+  px-4 py-3
+  text-sm text-slate-900
+  outline-none
+  transition-all
+  placeholder:text-slate-400
+  focus:border-[#3483FA]
+  focus:bg-white
+  focus:ring-4
+  focus:ring-blue-100
+  disabled:cursor-not-allowed
+  disabled:opacity-70
+`;
+
+type CampoFormularioProps = {
+  id: string;
+  etiqueta: string;
+  icono: React.ReactNode;
+  requerido?: boolean;
+  children: React.ReactNode;
+};
+
+function CampoFormulario({
+  id,
+  etiqueta,
+  icono,
+  requerido = false,
+  children,
+}: CampoFormularioProps) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
         className="
-          px-6
-          py-3
-          rounded-xl
-          border
-          border-gray-300
-          bg-white
-          text-gray-700
-          font-medium
-          hover:bg-gray-100
-          disabled:opacity-50
-          transition-all
+          mb-2 flex items-center
+          gap-2 text-sm font-bold
+          text-slate-700
         "
       >
-        Cancelar
-      </button>
+        <span
+          aria-hidden="true"
+          className="text-[#3483FA]"
+        >
+          {icono}
+        </span>
 
-      <button
-        type="submit"
-        disabled={guardando}
-        className="
-          bg-[#3483FA]
-          hover:bg-[#2968C8]
-          disabled:bg-blue-300
-          text-white
-          font-medium
-          px-6
-          py-3
-          rounded-xl
-          shadow-md
-          hover:shadow-lg
-          transition-all
-        "
-      >
+        {etiqueta}
 
-        {guardando
+        {requerido && (
+          <span className="text-red-500">
+            *
+          </span>
+        )}
+      </label>
 
-          ? "Guardando..."
-
-          : matrimonio
-
-            ? "Actualizar matrimonio"
-
-            : "Guardar matrimonio"}
-
-      </button>
-
+      {children}
     </div>
-
-  </form>
-
-  <NuevoMinisterioModal
-    open={mostrarNuevoMinisterio}
-    onClose={() =>
-      setMostrarNuevoMinisterio(false)
-    }
-    onGuardado={async (nombre) => {
-
-     await cargarMinisterios();
-
-setMinisterio(nombre);
-
-setMostrarNuevoMinisterio(false);
-
-    }}
-  />
-
-  </>
-
-);
+  );
 }
