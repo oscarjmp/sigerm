@@ -1,11 +1,11 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import type { Matrimonio } from "@/types/matrimonio";
+import type { MatrimonioVista } from "@/types/matrimonio";
 import MatrimonioForm from "./MatrimonioForm";
 
 type Props = {
-  matrimonio?: Matrimonio;
+  matrimonio?: MatrimonioVista;
   trigger?: ReactNode;
 };
 

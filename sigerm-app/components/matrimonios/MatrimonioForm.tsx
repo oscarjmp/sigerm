@@ -3,26 +3,28 @@
 import { useEffect, useState, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { supabase } from "@/lib/supabase/client";
 import { subirImagen } from "@/lib/storage/imagenes";
 import { notificar } from "@/lib/notificaciones";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { PERMISOS } from "@/lib/permissions/permissions";
 
 import {
   guardarMatrimonio,
   actualizarMatrimonio,
+  type MatrimonioDatos,
 } from "@/lib/services/matrimonios";
 
 import {
   obtenerMinisterios,
 } from "@/lib/services/ministerios";
 
-import type { Matrimonio } from "@/types/matrimonio";
+import type { MatrimonioVista } from "@/types/matrimonio";
 
 import NuevoMinisterioModal from "./NuevoMinisterioModal";
 
 type Props = {
   cerrar: () => void;
-  matrimonio?: Matrimonio;
+  matrimonio?: MatrimonioVista;
 };
 
 export default function MatrimonioForm({
@@ -31,6 +33,8 @@ export default function MatrimonioForm({
 }: Props) {
 
   const router = useRouter();
+
+  const { puede, cargando } = useAuth();
 
   const [esposo, setEsposo] = useState(
     matrimonio?.esposo ?? ""
@@ -109,6 +113,36 @@ function seleccionarFoto(
 }
   async function guardar() {
 
+    // El formulario permanece montado mientras se revalida la sesión para no
+    // perder lo capturado, pero no se permite guardar hasta que termine.
+    if (cargando) {
+
+      notificar.advertencia(
+        "Verificando su sesión. Intente guardar nuevamente en unos segundos."
+      );
+
+      return;
+
+    }
+
+    // Comprobación de interfaz previa a cualquier subida de fotografía o
+    // escritura. La autorización definitiva la impone RLS en Supabase.
+    const permisoRequerido = matrimonio
+      ? PERMISOS.EDITAR_MATRIMONIO
+      : PERMISOS.CREAR_MATRIMONIO;
+
+    if (!puede(permisoRequerido)) {
+
+      notificar.error(
+        matrimonio
+          ? "No tiene permisos para editar matrimonios."
+          : "No tiene permisos para registrar matrimonios."
+      );
+
+      return;
+
+    }
+
     if (!esposo.trim()) {
 
       notificar.advertencia(
@@ -141,8 +175,6 @@ function seleccionarFoto(
 
 setGuardando(true);
 
-let error;
-
 let fotoUrl = matrimonio?.foto ?? null;
 
 if (foto) {
@@ -154,12 +186,14 @@ if (foto) {
       foto
     );
 
-  } catch (e: any) {
+  } catch (e: unknown) {
 
   console.error(e);
 
   notificar.error(
-    e.message ?? "No fue posible subir la fotografía."
+    e instanceof Error && e.message
+      ? e.message
+      : "No fue posible subir la fotografía."
   );
 
   setGuardando(false);
@@ -170,7 +204,10 @@ if (foto) {
 
 }
 
-const datos = {
+// Solo columnas de datos. El estado (activo) no se envía desde aquí:
+// - en el alta, guardarMatrimonio añade activo: true;
+// - en la edición no se envía, para no reactivar matrimonios inactivos.
+const datos: MatrimonioDatos = {
 
   esposo: esposo.toUpperCase(),
 
@@ -186,25 +223,16 @@ const datos = {
 
   foto: fotoUrl,
 
-  activo: true,
-
 };
-    if (matrimonio) {
 
-      ({ error } =
-        await actualizarMatrimonio(
+    const { error } = matrimonio
+      ? await actualizarMatrimonio(
           matrimonio.id,
           datos
-        ));
-
-    } else {
-
-      ({ error } =
-        await guardarMatrimonio(
+        )
+      : await guardarMatrimonio(
           datos
-        ));
-
-    }
+        );
 
     setGuardando(false);
 

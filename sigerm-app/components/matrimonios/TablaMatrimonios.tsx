@@ -3,11 +3,16 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+
+import Can from "@/components/auth/Can";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { notificar } from "@/lib/notificaciones";
+import { PERMISOS } from "@/lib/permissions/permissions";
+import { cambiarEstadoMatrimonio } from "@/lib/services/matrimonios";
 
 import MatrimonioModal from "./MatrimonioModal";
 
-import type { Matrimonio } from "@/types/matrimonio";
+import type { MatrimonioVista as Matrimonio } from "@/types/matrimonio";
 
 
 
@@ -22,6 +27,15 @@ export default function TablaMatrimonios({
   const router = useRouter();
 
   const [busqueda, setBusqueda] = useState("");
+
+  const [procesandoId, setProcesandoId] =
+    useState<string | null>(null);
+
+  // Mientras se revalida la sesión no se permiten cambios de estado.
+  const { cargando } = useAuth();
+
+  const accionesBloqueadas =
+    procesandoId !== null || cargando;
 
   const matrimoniosFiltrados = matrimonios.filter(
     (matrimonio) => {
@@ -79,32 +93,61 @@ export default function TablaMatrimonios({
 
     );
 
-  async function eliminarMatrimonio(
-    id: string
+  // Desactivación / reactivación lógica. No existe eliminación física.
+  async function cambiarEstado(
+    matrimonio: Matrimonio,
+    activar: boolean
   ) {
 
-    if (
-      !confirm(
-        "¿Desea eliminar este matrimonio?"
-      )
-    ) {
+    if (accionesBloqueadas) {
       return;
     }
 
-    const { error } = await supabase
-      .from("matrimonios")
-      .delete()
-      .eq("id", id);
+    const nombre =
+      `${matrimonio.esposo} y ${matrimonio.esposa}`;
 
-    if (error) {
+    const mensaje = activar
+      ? `¿Desea reactivar a ${nombre}?\n\n` +
+        "Volverá a estar disponible en el selector de préstamos."
+      : `¿Desea desactivar a ${nombre}?\n\n` +
+        "Dejará de aparecer en el selector de préstamos. " +
+        "Su información y su historial de préstamos se conservarán.";
 
-      alert(error.message);
-
+    if (!window.confirm(mensaje)) {
       return;
-
     }
 
-    router.refresh();
+    setProcesandoId(matrimonio.id);
+
+    try {
+
+      const { error } =
+        await cambiarEstadoMatrimonio(
+          matrimonio.id,
+          activar
+        );
+
+      if (error) {
+
+        notificar.error(error.message);
+
+        return;
+
+      }
+
+      notificar.exito(
+        activar
+          ? "Matrimonio reactivado correctamente."
+          : "Matrimonio desactivado correctamente."
+      );
+
+      router.refresh();
+
+    } finally {
+
+      setProcesandoId(null);
+
+    }
 
   }
 
@@ -271,11 +314,23 @@ export default function TablaMatrimonios({
   )}
 </div>
 
-                          <span className="text-[15px] font-normal text-slate-800">
+                          <div className="flex flex-col items-start gap-1">
 
-                            {matrimonio.esposo} y {matrimonio.esposa}
+                            <span
+                              className={`text-[15px] font-normal ${
+                                matrimonio.activo
+                                  ? "text-slate-800"
+                                  : "text-slate-500"
+                              }`}
+                            >
 
-                          </span>
+                              {matrimonio.esposo} y {matrimonio.esposa}
+
+                            </span>
+
+                            <EtiquetaEstado activo={matrimonio.activo} />
+
+                          </div>
 
                         </div>
 
@@ -318,13 +373,24 @@ export default function TablaMatrimonios({
 
                       <td className="px-5 py-4">
 
+                        <Can
+                          permiso={PERMISOS.EDITAR_MATRIMONIO}
+                          conservarDuranteRevalidacion
+                          fallback={
+                            <span className="block text-center text-sm text-slate-400">
+                              —
+                            </span>
+                          }
+                        >
+
                         <div className="flex justify-center gap-2">
 
                           <MatrimonioModal
-                            
+
                             matrimonio={matrimonio}
                             trigger={
                               <button
+                                type="button"
                                 className="
                                   bg-[#3483FA]
                                   hover:bg-[#2968C8]
@@ -344,28 +410,22 @@ export default function TablaMatrimonios({
                             }
                           />
 
-                          <button
+                          <BotonEstado
+                            activo={matrimonio.activo}
+                            procesando={procesandoId === matrimonio.id}
+                            deshabilitado={accionesBloqueadas}
                             onClick={() =>
-                              eliminarMatrimonio(matrimonio.id)
+                              cambiarEstado(
+                                matrimonio,
+                                !matrimonio.activo
+                              )
                             }
-                            className="
-                              bg-red-500
-                              hover:bg-red-600
-                              text-white
-                              font-medium
-                              px-3
-                              py-2
-                              text-sm
-                              rounded-xl
-                              shadow-sm
-                              transition-all
-                              duration-200
-                            "
-                          >
-                            Eliminar
-                          </button>
+                            className="px-3 py-2 shadow-sm"
+                          />
 
                         </div>
+
+                        </Can>
 
                       </td>
 
@@ -450,13 +510,17 @@ export default function TablaMatrimonios({
 
               <div
                 key={matrimonio.id}
-                className="
-                  bg-white
+                className={`
                   rounded-2xl
                   shadow-md
                   p-5
                   mb-4
-                "
+                  ${
+                    matrimonio.activo
+                      ? "bg-white"
+                      : "bg-slate-50 border border-slate-200"
+                  }
+                `}
               >
 
                 <div className="flex gap-4">
@@ -491,11 +555,23 @@ export default function TablaMatrimonios({
 
                   <div className="flex-1">
 
-                    <h3 className="text-base font-medium text-slate-800">
+                    <h3
+                      className={`text-base font-medium ${
+                        matrimonio.activo
+                          ? "text-slate-800"
+                          : "text-slate-500"
+                      }`}
+                    >
 
                       {matrimonio.esposo} y {matrimonio.esposa}
 
                     </h3>
+
+                    <div className="mt-1">
+
+                      <EtiquetaEstado activo={matrimonio.activo} />
+
+                    </div>
 
                     <p className="text-sm text-slate-500 mt-2">
 
@@ -535,6 +611,11 @@ export default function TablaMatrimonios({
 
                 </div>
 
+                <Can
+                  permiso={PERMISOS.EDITAR_MATRIMONIO}
+                  conservarDuranteRevalidacion
+                >
+
                 <div className="grid grid-cols-2 gap-3 mt-5">
 
                   <MatrimonioModal
@@ -542,6 +623,7 @@ export default function TablaMatrimonios({
                     trigger={
 
                       <button
+                        type="button"
                         className="
                           bg-[#3483FA]
                           hover:bg-[#2968C8]
@@ -562,29 +644,22 @@ export default function TablaMatrimonios({
                     }
                   />
 
-                  <button
+                  <BotonEstado
+                    activo={matrimonio.activo}
+                    procesando={procesandoId === matrimonio.id}
+                    deshabilitado={accionesBloqueadas}
                     onClick={() =>
-                      eliminarMatrimonio(
-                        matrimonio.id
+                      cambiarEstado(
+                        matrimonio,
+                        !matrimonio.activo
                       )
                     }
-                    className="
-                      bg-red-500
-                      hover:bg-red-600
-                      text-white
-                      rounded-xl
-                      py-3
-                      text-sm
-                      font-medium
-                      transition-all
-                    "
-                  >
-
-                    Eliminar
-
-                  </button>
+                    className="w-full py-3"
+                  />
 
                 </div>
+
+                </Can>
 
               </div>
 
@@ -601,5 +676,80 @@ export default function TablaMatrimonios({
   </>
 
 );
+
+}
+
+function EtiquetaEstado({
+  activo,
+}: {
+  activo: boolean;
+}) {
+
+  return activo ? (
+
+    <span className="inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+      Activo
+    </span>
+
+  ) : (
+
+    <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+      Inactivo
+    </span>
+
+  );
+
+}
+
+function BotonEstado({
+  activo,
+  procesando,
+  deshabilitado,
+  onClick,
+  className = "",
+}: {
+  activo: boolean;
+  procesando: boolean;
+  deshabilitado: boolean;
+  onClick: () => void;
+  className?: string;
+}) {
+
+  const etiqueta = procesando
+    ? activo
+      ? "Desactivando..."
+      : "Reactivando..."
+    : activo
+      ? "Desactivar"
+      : "Reactivar";
+
+  return (
+
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={deshabilitado}
+      aria-busy={procesando}
+      className={`
+        ${
+          activo
+            ? "bg-amber-500 hover:bg-amber-600"
+            : "bg-emerald-600 hover:bg-emerald-700"
+        }
+        text-white
+        font-medium
+        text-sm
+        rounded-xl
+        transition-all
+        duration-200
+        disabled:cursor-not-allowed
+        disabled:opacity-50
+        ${className}
+      `}
+    >
+      {etiqueta}
+    </button>
+
+  );
 
 }
