@@ -3,7 +3,6 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -725,25 +724,15 @@ disabled:cursor-not-allowed
                     ¿Todavía no tiene una cuenta?
                   </p>
 
-                  <Link
-                    href="/registro"
+                  <p
                     className="
-                      mt-2 inline-flex
-                      items-center gap-2
-                      font-black
+                      mt-2
+                      text-sm font-bold
                       text-[#8B1E2D]
-                      transition
-                      hover:text-[#741827]
-                      hover:underline
                     "
                   >
-                    Registrar nuevo usuario
-
-                    <ArrowRight
-                      className="h-4 w-4"
-                      aria-hidden="true"
-                    />
-                  </Link>
+                    Solicítela al Administrador de SIGERM.
+                  </p>
                 </div>
               </form>
             </div>
