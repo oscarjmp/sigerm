@@ -2,8 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const RUTAS_PROTEGIDAS = [
+  "/administracion",
+  "/catalogo",
   "/dashboard",
   "/inventario",
+  "/kardex",
   "/matrimonios",
   "/prestamos",
   "/reportes",
