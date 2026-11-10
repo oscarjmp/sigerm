@@ -253,6 +253,21 @@ export async function PUT(
       );
     }
 
+    if (
+      datos.activo !== undefined &&
+      typeof datos.activo !== "boolean"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "El estado del usuario no es válido.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
     const nombre = limpiarTexto(datos.nombre);
 
     const apellidoPaterno =
@@ -265,8 +280,6 @@ export async function PUT(
       limpiarTexto(datos.telefono) || null;
 
     const rolId = limpiarTexto(datos.rol_id);
-
-    const activo = datos.activo ?? true;
 
     const {
       data: usuarioExistente,
@@ -311,6 +324,23 @@ export async function PUT(
       );
     }
 
+    /*
+     * Si la petición no incluye "activo", se conserva el
+     * estado actual (editar no reactiva ni desactiva).
+     */
+    const activo =
+      typeof datos.activo === "boolean"
+        ? datos.activo
+        : usuarioExistente.activo;
+
+    /*
+     * Se compara con el id devuelto por la base de datos,
+     * no con el parámetro de la URL, para evitar variantes
+     * de mayúsculas del mismo UUID.
+     */
+    const esPropiaCuenta =
+      perfilAdministrador.id === usuarioExistente.id;
+
     const {
       data: rol,
       error: rolError,
@@ -349,19 +379,30 @@ export async function PUT(
       );
     }
 
-    if (
-      perfilAdministrador.id === id &&
-      !activo
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "No puede desactivar su propia cuenta.",
-        },
-        {
-          status: 400,
-        },
-      );
+    if (esPropiaCuenta) {
+      if (!activo) {
+        return NextResponse.json(
+          {
+            error:
+              "No puede desactivar su propia cuenta.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (rolId !== usuarioExistente.rol_id) {
+        return NextResponse.json(
+          {
+            error:
+              "No puede modificar su propio rol.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
     }
 
     const {
