@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import type { ReactNode } from "react";
 import {
   HeartHandshake,
@@ -62,6 +63,8 @@ function obtenerNombreRol(
 }
 
 export default async function MatrimoniosPage() {
+  await requerirPermiso(PERMISOS.VER_MATRIMONIOS, "/matrimonios");
+
   const supabase = await createClient();
 
   /*

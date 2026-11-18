@@ -13,7 +13,7 @@ import type {
 
 import { useAuth } from "@/lib/hooks/useAuth";
 import { PERMISOS } from "@/lib/permissions/permissions";
-import { supabase } from "@/lib/supabase/client";
+import { cambiarEstadoArticulo } from "@/lib/services/articulos";
 
 type InventarioClienteProps = {
   articulos: ArticuloInventario[];
@@ -49,14 +49,14 @@ export default function InventarioCliente({
     setArticuloSeleccionado,
   ] = useState<ArticuloInventario | null>(null);
 
-  const [eliminandoId, setEliminandoId] =
+  const [procesandoId, setProcesandoId] =
     useState<string | null>(null);
 
   const puedeEditar = puede(
     PERMISOS.EDITAR_ARTICULO,
   );
 
-  const puedeEliminar = puede(
+  const puedeDesactivar = puede(
     PERMISOS.DESACTIVAR_ARTICULO,
   );
 
@@ -83,31 +83,39 @@ export default function InventarioCliente({
     });
   }, [articulos, busqueda]);
 
-  async function eliminarArticulo(
+  async function cambiarEstado(
     articulo: ArticuloInventario,
   ) {
-    if (!puedeEliminar) {
+    if (!puedeDesactivar) {
       window.alert(
-        "No cuenta con permiso para eliminar artículos.",
+        "No cuenta con permiso para desactivar artículos.",
       );
       return;
     }
 
+    const nuevoEstado = articulo.activo === false;
+
+    /*
+     * Baja lógica: el artículo se conserva (activo = false) para no
+     * romper el Kardex ni los préstamos. No existe eliminación física.
+     */
     const confirmado = window.confirm(
-      `¿Desea eliminar el artículo "${articulo.nombre}"?`,
+      nuevoEstado
+        ? `¿Desea reactivar el artículo "${articulo.nombre}"?`
+        : `¿Desea desactivar el artículo "${articulo.nombre}"?\n\nEl registro y su historial se conservan.`,
     );
 
     if (!confirmado) {
       return;
     }
 
-    setEliminandoId(articulo.id);
+    setProcesandoId(articulo.id);
 
     try {
-      const { error } = await supabase
-        .from("articulos")
-        .delete()
-        .eq("id", articulo.id);
+      const { error } = await cambiarEstadoArticulo(
+        articulo.id,
+        nuevoEstado,
+      );
 
       if (error) {
         throw new Error(error.message);
@@ -120,7 +128,9 @@ export default function InventarioCliente({
       }
 
       window.alert(
-        "Artículo eliminado correctamente.",
+        nuevoEstado
+          ? "Artículo reactivado correctamente."
+          : "Artículo desactivado correctamente.",
       );
 
       router.refresh();
@@ -128,11 +138,11 @@ export default function InventarioCliente({
       const mensaje =
         error instanceof Error
           ? error.message
-          : "No fue posible eliminar el artículo.";
+          : "No fue posible cambiar el estado del artículo.";
 
       window.alert(mensaje);
     } finally {
-      setEliminandoId(null);
+      setProcesandoId(null);
     }
   }
 
@@ -243,9 +253,9 @@ export default function InventarioCliente({
         <InventarioCards
           articulos={articulosFiltrados}
           puedeEditar={puedeEditar}
-          puedeEliminar={puedeEliminar}
-          eliminandoId={eliminandoId}
-          onEliminar={eliminarArticulo}
+          puedeDesactivar={puedeDesactivar}
+          procesandoId={procesandoId}
+          onCambiarEstado={cambiarEstado}
           onVerDetalle={abrirDetalle}
         />
       )}

@@ -4,9 +4,7 @@ import type {
 } from "@supabase/supabase-js";
 
 import type {
-  CrearMovimientoInput,
   FiltrosMovimientos,
-  MetadataMovimiento,
   Movimiento,
   MovimientoConRelaciones,
   ResultadoMovimientos,
@@ -153,134 +151,6 @@ function tieneTexto(valor: string | null | undefined): boolean {
 }
 
 /**
- * Normaliza cadenas opcionales.
- *
- * Las cadenas vacías se guardan como null para evitar información
- * ambigua en PostgreSQL.
- */
-function normalizarTexto(
-  valor: string | null | undefined,
-): string | null {
-  if (!tieneTexto(valor)) {
-    return null;
-  }
-
-  return valor!.trim();
-}
-
-/**
- * Verifica que un número sea entero y no negativo.
- */
-function validarEnteroNoNegativo(
-  valor: number,
-  campo: string,
-): void {
-  if (!Number.isInteger(valor) || valor < 0) {
-    throw new MovimientosRepositoryError(
-      `El campo "${campo}" debe ser un número entero mayor o igual a cero.`,
-    );
-  }
-}
-
-/**
- * Valida la información mínima necesaria antes de insertar
- * un movimiento.
- */
-function validarMovimiento(
-  movimiento: CrearMovimientoInput,
-): void {
-  if (!tieneTexto(movimiento.articulo_id)) {
-    throw new MovimientosRepositoryError(
-      "El artículo es obligatorio para registrar el movimiento.",
-    );
-  }
-
-  if (!tieneTexto(movimiento.tipo)) {
-    throw new MovimientosRepositoryError(
-      "El tipo de movimiento es obligatorio.",
-    );
-  }
-
-  validarEnteroNoNegativo(
-    movimiento.cantidad,
-    "cantidad",
-  );
-
-  if (
-    movimiento.existencia_anterior !== undefined &&
-    movimiento.existencia_anterior !== null
-  ) {
-    validarEnteroNoNegativo(
-      movimiento.existencia_anterior,
-      "existencia_anterior",
-    );
-  }
-
-  if (
-    movimiento.existencia_nueva !== undefined &&
-    movimiento.existencia_nueva !== null
-  ) {
-    validarEnteroNoNegativo(
-      movimiento.existencia_nueva,
-      "existencia_nueva",
-    );
-  }
-
-  const tieneExistenciaAnterior =
-    movimiento.existencia_anterior !== undefined &&
-    movimiento.existencia_anterior !== null;
-
-  const tieneExistenciaNueva =
-    movimiento.existencia_nueva !== undefined &&
-    movimiento.existencia_nueva !== null;
-
-  if (tieneExistenciaAnterior !== tieneExistenciaNueva) {
-    throw new MovimientosRepositoryError(
-      "La existencia anterior y la existencia nueva deben enviarse juntas.",
-    );
-  }
-}
-
-/**
- * Prepara los datos para insertar en public.movimientos.
- *
- * No se envían:
- *
- * - id: generado por PostgreSQL.
- * - fecha: utiliza now().
- * - usuario_id: lo asigna el trigger.
- * - diferencia: columna GENERATED.
- */
-function prepararMovimiento(
-  movimiento: CrearMovimientoInput,
-): Record<string, unknown> {
-  validarMovimiento(movimiento);
-
-  const metadata: MetadataMovimiento =
-    movimiento.metadata ?? {};
-
-  return {
-    articulo_id: movimiento.articulo_id,
-    prestamo_id: movimiento.prestamo_id ?? null,
-    tipo: movimiento.tipo,
-    cantidad: movimiento.cantidad,
-    usuario: normalizarTexto(movimiento.usuario),
-    observaciones: normalizarTexto(
-      movimiento.observaciones,
-    ),
-    existencia_anterior:
-      movimiento.existencia_anterior ?? null,
-    existencia_nueva:
-      movimiento.existencia_nueva ?? null,
-    motivo: normalizarTexto(movimiento.motivo),
-    referencia: normalizarTexto(
-      movimiento.referencia,
-    ),
-    metadata,
-  };
-}
-
-/**
  * Normaliza y limita los parámetros de paginación.
  */
 function obtenerPaginacion(
@@ -326,7 +196,12 @@ function obtenerPaginacion(
 }
 
 /**
- * Repositorio central del Kardex.
+ * Repositorio de CONSULTA del Kardex.
+ *
+ * No registra movimientos: la escritura en public.movimientos solo se
+ * realiza mediante las funciones RPC SECURITY DEFINER del servidor
+ * (registrar_prestamo, devolver_prestamo), que mantienen existencias y
+ * Kardex en una misma transacción.
  *
  * No crea internamente un cliente Supabase. Recibe el cliente
  * correspondiente al contexto:
@@ -341,67 +216,6 @@ export class MovimientosRepository {
   constructor(
     private readonly supabase: SupabaseClient,
   ) {}
-
-  /**
-   * Registra un movimiento y devuelve la fila creada.
-   */
-  async registrar(
-    input: CrearMovimientoInput,
-  ): Promise<Movimiento> {
-    const movimiento = prepararMovimiento(input);
-
-    const { data, error } = await this.supabase
-      .from("movimientos")
-      .insert(movimiento)
-      .select(COLUMNAS_MOVIMIENTO)
-      .single();
-
-    if (error) {
-      throw crearErrorRepositorio(
-        "No fue posible registrar el movimiento",
-        error,
-      );
-    }
-
-    if (!data) {
-      throw new MovimientosRepositoryError(
-        "Supabase no devolvió el movimiento registrado.",
-      );
-    }
-
-    return data as Movimiento;
-  }
-
-  /**
-   * Registra varios movimientos.
-   *
-   * Esta función realiza una sola inserción múltiple. No reemplaza
-   * una función RPC cuando también deben actualizarse existencias
-   * o préstamos dentro de la misma transacción.
-   */
-  async registrarVarios(
-    inputs: CrearMovimientoInput[],
-  ): Promise<Movimiento[]> {
-    if (inputs.length === 0) {
-      return [];
-    }
-
-    const movimientos = inputs.map(prepararMovimiento);
-
-    const { data, error } = await this.supabase
-      .from("movimientos")
-      .insert(movimientos)
-      .select(COLUMNAS_MOVIMIENTO);
-
-    if (error) {
-      throw crearErrorRepositorio(
-        "No fue posible registrar los movimientos",
-        error,
-      );
-    }
-
-    return (data ?? []) as Movimiento[];
-  }
 
   /**
    * Obtiene un movimiento por su identificador.

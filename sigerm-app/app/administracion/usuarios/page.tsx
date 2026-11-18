@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import MainLayout from "@/components/layout/MainLayout";
 import RequirePermission from "@/components/auth/RequirePermission";
 import TablaUsuarios from "@/components/usuarios/TablaUsuarios";
@@ -27,6 +28,8 @@ function normalizarUsuario(
 }
 
 export default async function UsuariosPage() {
+  await requerirPermiso(PERMISOS.ADMINISTRAR_USUARIOS, "/administracion/usuarios");
+
   const supabase = await createClient();
 
   const [

@@ -7,7 +7,7 @@ import {
   Mail,
   Pencil,
   Phone,
-  Trash2,
+  Power,
   Users,
 } from "lucide-react";
 
@@ -17,10 +17,10 @@ import type { Matrimonio } from "@/types/matrimonio";
 
 type MatrimoniosCardsProps = {
   matrimonios: Matrimonio[];
-  eliminandoId: string | null;
+  procesandoId: string | null;
   usuarioActualId: string | null;
   esAdministrador: boolean;
-  onEliminar: (
+  onCambiarEstado: (
     matrimonio: Matrimonio,
   ) => Promise<void>;
 };
@@ -72,10 +72,10 @@ function puedeAdministrarMatrimonio(
 
 export default function MatrimoniosCards({
   matrimonios,
-  eliminandoId,
+  procesandoId,
   usuarioActualId,
   esAdministrador,
-  onEliminar,
+  onCambiarEstado,
 }: MatrimoniosCardsProps) {
   if (matrimonios.length === 0) {
     return (
@@ -125,8 +125,8 @@ export default function MatrimoniosCards({
       "
     >
       {matrimonios.map((matrimonio) => {
-        const eliminando =
-          eliminandoId === matrimonio.id;
+        const procesando =
+          procesandoId === matrimonio.id;
 
         const puedeAdministrar =
           puedeAdministrarMatrimonio(
@@ -305,9 +305,9 @@ export default function MatrimoniosCards({
                   <button
                     type="button"
                     onClick={() =>
-                      onEliminar(matrimonio)
+                      onCambiarEstado(matrimonio)
                     }
-                    disabled={eliminando}
+                    disabled={procesando}
                     className="
                       inline-flex min-h-11
                       items-center justify-center
@@ -325,11 +325,11 @@ export default function MatrimoniosCards({
                       disabled:opacity-60
                     "
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Power className="h-4 w-4" />
 
-                    {eliminando
-                      ? "Eliminando..."
-                      : "Eliminar"}
+                    {procesando
+                      ? (matrimonio.activo ? "Desactivando..." : "Reactivando...")
+                      : matrimonio.activo ? "Desactivar" : "Reactivar"}
                   </button>
                 </div>
               ) : (

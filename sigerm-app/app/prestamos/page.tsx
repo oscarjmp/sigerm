@@ -1,3 +1,5 @@
+import { PERMISOS } from "@/lib/permissions/permissions";
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import { redirect } from "next/navigation";
 
 import MainLayout from "@/components/layout/MainLayout";
@@ -89,6 +91,8 @@ function obtenerNombreRol(
 }
 
 export default async function PrestamosPage() {
+  await requerirPermiso(PERMISOS.VER_PRESTAMOS, "/prestamos");
+
   const supabase = await createClient();
 
   // ==========================================================

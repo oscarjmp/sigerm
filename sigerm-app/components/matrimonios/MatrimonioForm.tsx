@@ -29,6 +29,7 @@ import { notificar } from "@/lib/notificaciones";
 import {
   actualizarMatrimonio,
   guardarMatrimonio,
+  type MatrimonioDatos,
 } from "@/lib/services/matrimonios";
 import { obtenerMinisterios } from "@/lib/services/ministerios";
 import { supabase } from "@/lib/supabase/client";
@@ -267,20 +268,11 @@ export default function MatrimonioForm({
       }
 
       /*
-       * Al editar se conserva el propietario.
-       * Al crear se asigna el usuario conectado.
+       * Solo columnas de datos. activo y usuario_id no se envían al
+       * editar: editar no reactiva ni cambia el propietario. En el alta,
+       * guardarMatrimonio asigna el usuario conectado y activo: true.
        */
-      const usuarioId =
-        matrimonio?.usuario_id ??
-        (await obtenerUsuarioActualId());
-
-      if (!usuarioId && !matrimonio) {
-        throw new Error(
-          "No fue posible identificar al usuario que registrará el matrimonio.",
-        );
-      }
-
-      const datos = {
+      const datos: MatrimonioDatos = {
         esposo:
           esposoLimpio.toLocaleUpperCase(
             "es-MX",
@@ -294,16 +286,30 @@ export default function MatrimonioForm({
         direccion: direccion.trim(),
         ministerio: ministerioLimpio,
         foto: fotoUrl,
-        activo: matrimonio?.activo ?? true,
-        usuario_id: usuarioId,
       };
 
-      const resultado = matrimonio
-        ? await actualizarMatrimonio(
-            matrimonio.id,
-            datos,
-          )
-        : await guardarMatrimonio(datos);
+      let resultado;
+
+      if (matrimonio) {
+        resultado = await actualizarMatrimonio(
+          matrimonio.id,
+          datos,
+        );
+      } else {
+        const usuarioId =
+          await obtenerUsuarioActualId();
+
+        if (!usuarioId) {
+          throw new Error(
+            "No fue posible identificar al usuario que registrará el matrimonio.",
+          );
+        }
+
+        resultado = await guardarMatrimonio(
+          datos,
+          usuarioId,
+        );
+      }
 
       if (resultado.error) {
         throw new Error(

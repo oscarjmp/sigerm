@@ -6,7 +6,7 @@ import {
   FileClock,
   PackageOpen,
   Pencil,
-  Trash2,
+  Power,
 } from "lucide-react";
 
 import FotoArticulo from "@/components/inventario/FotoArticulo";
@@ -16,9 +16,9 @@ import type { ArticuloInventario } from "@/components/inventario/types";
 type InventarioCardsProps = {
   articulos: ArticuloInventario[];
   puedeEditar: boolean;
-  puedeEliminar: boolean;
-  eliminandoId: string | null;
-  onEliminar: (
+  puedeDesactivar: boolean;
+  procesandoId: string | null;
+  onCambiarEstado: (
     articulo: ArticuloInventario,
   ) => void;
   onVerDetalle: (
@@ -148,9 +148,9 @@ function EstadoArticulo({
 export default function InventarioCards({
   articulos,
   puedeEditar,
-  puedeEliminar,
-  eliminandoId,
-  onEliminar,
+  puedeDesactivar,
+  procesandoId,
+  onCambiarEstado,
   onVerDetalle,
 }: InventarioCardsProps) {
   if (articulos.length === 0) {
@@ -214,8 +214,8 @@ export default function InventarioCards({
       "
     >
       {articulos.map((articulo) => {
-        const eliminando =
-          eliminandoId === articulo.id;
+        const procesando =
+          procesandoId === articulo.id;
 
         return (
           <article
@@ -387,13 +387,13 @@ export default function InventarioCards({
 
               {/* Acciones administrativas */}
               {(puedeEditar ||
-                puedeEliminar) && (
+                puedeDesactivar) && (
                 <div
                   className={`
                     mt-3 grid gap-3
                     ${
                       puedeEditar &&
-                      puedeEliminar
+                      puedeDesactivar
                         ? "grid-cols-2"
                         : "grid-cols-1"
                     }
@@ -429,13 +429,13 @@ export default function InventarioCards({
                     </Link>
                   )}
 
-                  {puedeEliminar && (
+                  {puedeDesactivar && (
                     <button
                       type="button"
                       onClick={() =>
-                        onEliminar(articulo)
+                        onCambiarEstado(articulo)
                       }
-                      disabled={eliminando}
+                      disabled={procesando}
                       className="
                         inline-flex min-h-11
                         items-center justify-center
@@ -455,21 +455,21 @@ export default function InventarioCards({
                         disabled:opacity-60
                       "
                     >
-                      <Trash2
+                      <Power
                         className="h-4 w-4"
                         aria-hidden="true"
                       />
 
-                      {eliminando
-                        ? "Eliminando..."
-                        : "Eliminar"}
+                      {procesando
+                        ? (articulo.activo === false ? "Reactivando..." : "Desactivando...")
+                        : articulo.activo === false ? "Reactivar" : "Desactivar"}
                     </button>
                   )}
                 </div>
               )}
 
               {!puedeEditar &&
-                !puedeEliminar && (
+                !puedeDesactivar && (
                   <p
                     className="
                       mt-4 text-center

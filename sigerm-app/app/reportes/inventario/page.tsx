@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import Image from "next/image";
 
 import PermissionGuard from "@/components/auth/PermissionGuard";
@@ -50,6 +51,8 @@ function obtenerClaseEstado(
 }
 
 export default async function ReporteInventario() {
+  await requerirPermiso(PERMISOS.VER_REPORTES, "/reportes/inventario");
+
   const supabase = await createClient();
 
   const { data, error } = await supabase

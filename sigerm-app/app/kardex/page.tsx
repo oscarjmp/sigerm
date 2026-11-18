@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import {
   Activity,
   ArrowDownToLine,
@@ -36,6 +37,8 @@ function obtenerCantidadSegura(
 }
 
 export default async function KardexPage() {
+  await requerirPermiso(PERMISOS.VER_KARDEX, "/kardex");
+
   const supabase = await createClient();
 
   const { data, error } = await supabase

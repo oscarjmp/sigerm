@@ -1,3 +1,5 @@
+import { PERMISOS } from "@/lib/permissions/permissions";
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import ArticuloForm from "@/components/inventario/ArticuloForm";
 import MainLayout from "@/components/layout/MainLayout";
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +11,8 @@ export default async function EditarArticuloPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  await requerirPermiso(PERMISOS.EDITAR_ARTICULO, "/inventario/editar");
 
   const supabase = await createClient();
 

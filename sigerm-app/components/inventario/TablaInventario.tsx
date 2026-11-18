@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/hooks/useAuth";
 import { PERMISOS } from "@/lib/permissions/permissions";
-import { supabase } from "@/lib/supabase/client";
+import { cambiarEstadoArticulo } from "@/lib/services/articulos";
 import type { ArticuloInventario } from "@/components/inventario/types";
 
 
@@ -33,14 +33,14 @@ export default function TablaInventario({
   const { puede } = useAuth();
 
   const [busqueda, setBusqueda] = useState("");
-  const [eliminandoId, setEliminandoId] =
+  const [procesandoId, setProcesandoId] =
     useState<string | null>(null);
 
   const puedeEditar = puede(
     PERMISOS.EDITAR_ARTICULO,
   );
 
-  const puedeEliminar = puede(
+  const puedeDesactivar = puede(
     PERMISOS.DESACTIVAR_ARTICULO,
   );
 
@@ -90,38 +90,44 @@ export default function TablaInventario({
     }, {});
   }, [articulosFiltrados]);
 
-  async function eliminarArticulo(
+  async function cambiarEstado(
     articulo: ArticuloInventario,
   ) {
-    if (!puedeEliminar) {
+    if (!puedeDesactivar) {
       window.alert(
-        "No cuenta con permiso para eliminar artículos.",
+        "No cuenta con permiso para desactivar artículos.",
       );
       return;
     }
 
+    const nuevoEstado = articulo.activo === false;
+
     const confirmar = window.confirm(
-      `¿Desea eliminar el artículo "${articulo.nombre}"?`,
+      nuevoEstado
+        ? `¿Desea reactivar el artículo "${articulo.nombre}"?`
+        : `¿Desea desactivar el artículo "${articulo.nombre}"?\n\nEl registro y su historial se conservan.`,
     );
 
     if (!confirmar) {
       return;
     }
 
-    setEliminandoId(articulo.id);
+    setProcesandoId(articulo.id);
 
     try {
-      const { error } = await supabase
-        .from("articulos")
-        .delete()
-        .eq("id", articulo.id);
+      const { error } = await cambiarEstadoArticulo(
+        articulo.id,
+        nuevoEstado,
+      );
 
       if (error) {
         throw new Error(error.message);
       }
 
       window.alert(
-        "Artículo eliminado correctamente.",
+        nuevoEstado
+          ? "Artículo reactivado correctamente."
+          : "Artículo desactivado correctamente.",
       );
 
       router.refresh();
@@ -129,11 +135,11 @@ export default function TablaInventario({
       const mensaje =
         error instanceof Error
           ? error.message
-          : "No fue posible eliminar el artículo.";
+          : "No fue posible cambiar el estado del artículo.";
 
       window.alert(mensaje);
     } finally {
-      setEliminandoId(null);
+      setProcesandoId(null);
     }
   }
 
@@ -178,7 +184,7 @@ export default function TablaInventario({
   }
 
   const existenAcciones =
-    puedeEditar || puedeEliminar;
+    puedeEditar || puedeDesactivar;
 
   return (
     <>
@@ -327,16 +333,16 @@ export default function TablaInventario({
                               </Link>
                             )}
 
-                            {puedeEliminar && (
+                            {puedeDesactivar && (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  eliminarArticulo(
+                                  cambiarEstado(
                                     articulo,
                                   )
                                 }
                                 disabled={
-                                  eliminandoId ===
+                                  procesandoId ===
                                   articulo.id
                                 }
                                 className="
@@ -349,10 +355,10 @@ export default function TablaInventario({
                                   disabled:bg-red-300
                                 "
                               >
-                                {eliminandoId ===
+                                {procesandoId ===
                                 articulo.id
-                                  ? "Eliminando..."
-                                  : "Eliminar"}
+                                  ? (articulo.activo === false ? "Reactivando..." : "Desactivando...")
+                                  : articulo.activo === false ? "Reactivar" : "Desactivar"}
                               </button>
                             )}
                           </div>
@@ -449,7 +455,7 @@ export default function TablaInventario({
                   <div
                     className={`mt-5 grid gap-3 ${
                       puedeEditar &&
-                      puedeEliminar
+                      puedeDesactivar
                         ? "grid-cols-2"
                         : "grid-cols-1"
                     }`}
@@ -463,16 +469,16 @@ export default function TablaInventario({
                       </Link>
                     )}
 
-                    {puedeEliminar && (
+                    {puedeDesactivar && (
                       <button
                         type="button"
                         onClick={() =>
-                          eliminarArticulo(
+                          cambiarEstado(
                             articulo,
                           )
                         }
                         disabled={
-                          eliminandoId ===
+                          procesandoId ===
                           articulo.id
                         }
                         className="
@@ -482,10 +488,10 @@ export default function TablaInventario({
                           disabled:bg-red-300
                         "
                       >
-                        {eliminandoId ===
+                        {procesandoId ===
                         articulo.id
-                          ? "Eliminando..."
-                          : "Eliminar"}
+                          ? (articulo.activo === false ? "Reactivando..." : "Desactivando...")
+                          : articulo.activo === false ? "Reactivar" : "Desactivar"}
                       </button>
                     )}
                   </div>

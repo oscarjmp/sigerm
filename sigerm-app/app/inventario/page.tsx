@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import Link from "next/link";
 import {
   Boxes,
@@ -26,6 +27,8 @@ function obtenerNumeroSeguro(
 }
 
 export default async function InventarioPage() {
+  await requerirPermiso(PERMISOS.VER_INVENTARIO, "/inventario");
+
   const supabase = await createClient();
 
   const { data, error } = await supabase

@@ -7,14 +7,11 @@ import { usePathname } from "next/navigation";
 import {
   ClipboardList,
   HandHelping,
-  HeartHandshake,
   LayoutDashboard,
   LogOut,
   Package2,
-  Settings,
   ShieldCheck,
   ShoppingBag,
-  UserCheck,
   Users,
   Warehouse,
 } from "lucide-react";
@@ -38,6 +35,10 @@ type MenuItem = {
   permiso: Permiso;
 };
 
+/*
+ * Encuentros, Servidores y Configuración se incorporarán en MACRO 4.
+ * Se retiran del menú mientras sus páginas no existan (evita enlaces 404).
+ */
 const menus: MenuItem[] = [
   {
     name: "Dashboard",
@@ -70,22 +71,10 @@ const menus: MenuItem[] = [
     permiso: PERMISOS.VER_KARDEX,
   },
   {
-    name: "Encuentros",
-    href: "/encuentros",
-    icon: HeartHandshake,
-    permiso: PERMISOS.VER_ENCUENTROS,
-  },
-  {
     name: "Matrimonios",
     href: "/matrimonios",
     icon: Users,
     permiso: PERMISOS.VER_MATRIMONIOS,
-  },
-  {
-    name: "Servidores",
-    href: "/servidores",
-    icon: UserCheck,
-    permiso: PERMISOS.VER_SERVIDORES,
   },
   {
     name: "Reportes",
@@ -98,13 +87,6 @@ const menus: MenuItem[] = [
     href: "/administracion/usuarios",
     icon: ShieldCheck,
     permiso: PERMISOS.ADMINISTRAR_USUARIOS,
-  },
-  {
-    name: "Configuración",
-    href: "/configuracion",
-    icon: Settings,
-    permiso:
-      PERMISOS.ADMINISTRAR_CONFIGURACION,
   },
 ];
 

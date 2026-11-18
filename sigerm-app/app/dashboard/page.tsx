@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import { redirect } from "next/navigation";
 import {
   Activity,
@@ -415,6 +416,8 @@ function construirAlertas(
 }
 
 export default async function DashboardPage() {
+  await requerirPermiso(PERMISOS.VER_DASHBOARD, "/dashboard");
+
   const supabase = await createClient();
 
   const {

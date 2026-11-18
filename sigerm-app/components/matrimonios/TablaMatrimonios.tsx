@@ -12,14 +12,14 @@ import {
   Pencil,
   Phone,
   Search,
-  Trash2,
+  Power,
   Users,
 } from "lucide-react";
 
 import MatrimonioModal from "@/components/matrimonios/MatrimonioModal";
 import MatrimoniosCards from "@/components/matrimonios/MatrimoniosCards";
 
-import { supabase } from "@/lib/supabase/client";
+import { cambiarEstadoMatrimonio } from "@/lib/services/matrimonios";
 
 import type { Matrimonio } from "@/types/matrimonio";
 
@@ -39,10 +39,10 @@ type FotoMatrimonioProps = {
 type FragmentMinisterioProps = {
   ministerio: string;
   lista: Matrimonio[];
-  eliminandoId: string | null;
+  procesandoId: string | null;
   usuarioActualId: string | null;
   esAdministrador: boolean;
-  onEliminar: (
+  onCambiarEstado: (
     matrimonio: Matrimonio,
   ) => Promise<void>;
 };
@@ -272,7 +272,7 @@ export default function TablaMatrimonios({
   const [busqueda, setBusqueda] =
     useState("");
 
-  const [eliminandoId, setEliminandoId] =
+  const [procesandoId, setProcesandoId] =
     useState<string | null>(null);
 
   const matrimoniosFiltrados = useMemo(() => {
@@ -315,7 +315,7 @@ export default function TablaMatrimonios({
     }, {});
   }, [matrimoniosFiltrados]);
 
-  async function eliminarMatrimonio(
+  async function cambiarEstado(
     matrimonio: Matrimonio,
   ) {
     const autorizado =
@@ -325,35 +325,49 @@ export default function TablaMatrimonios({
         esAdministrador,
       );
 
+    const nuevoEstado = !matrimonio.activo;
+    const accion = nuevoEstado
+      ? "reactivar"
+      : "desactivar";
+
     if (!autorizado) {
       window.alert(
-        "No cuenta con autorización para eliminar este matrimonio.",
+        `No cuenta con autorización para ${accion} este matrimonio.`,
       );
       return;
     }
 
+    /*
+     * Baja lógica: el registro se conserva (activo = false) para no
+     * romper préstamos ni historial. No existe eliminación física.
+     */
     const confirmado = window.confirm(
-      `¿Desea eliminar el matrimonio "${matrimonio.esposo} y ${matrimonio.esposa}"?`,
+      nuevoEstado
+        ? `¿Desea reactivar el matrimonio "${matrimonio.esposo} y ${matrimonio.esposa}"?`
+        : `¿Desea desactivar el matrimonio "${matrimonio.esposo} y ${matrimonio.esposa}"?\n\nEl registro se conserva y podrá reactivarse.`,
     );
 
     if (!confirmado) {
       return;
     }
 
-    setEliminandoId(matrimonio.id);
+    setProcesandoId(matrimonio.id);
 
     try {
-      const { error } = await supabase
-        .from("matrimonios")
-        .delete()
-        .eq("id", matrimonio.id);
+      const { error } =
+        await cambiarEstadoMatrimonio(
+          matrimonio.id,
+          nuevoEstado,
+        );
 
       if (error) {
         throw new Error(error.message);
       }
 
       window.alert(
-        "Matrimonio eliminado correctamente.",
+        nuevoEstado
+          ? "Matrimonio reactivado correctamente."
+          : "Matrimonio desactivado correctamente.",
       );
 
       router.refresh();
@@ -361,11 +375,11 @@ export default function TablaMatrimonios({
       const mensaje =
         error instanceof Error
           ? error.message
-          : "No fue posible eliminar el matrimonio.";
+          : `No fue posible ${accion} el matrimonio.`;
 
       window.alert(mensaje);
     } finally {
-      setEliminandoId(null);
+      setProcesandoId(null);
     }
   }
 
@@ -542,10 +556,10 @@ export default function TablaMatrimonios({
       {vista === "album" && (
         <MatrimoniosCards
           matrimonios={matrimoniosFiltrados}
-          eliminandoId={eliminandoId}
+          procesandoId={procesandoId}
           usuarioActualId={usuarioActualId}
           esAdministrador={esAdministrador}
-          onEliminar={eliminarMatrimonio}
+          onCambiarEstado={cambiarEstado}
         />
       )}
 
@@ -608,10 +622,10 @@ export default function TablaMatrimonios({
                     key={ministerio}
                     ministerio={ministerio}
                     lista={lista}
-                    eliminandoId={eliminandoId}
+                    procesandoId={procesandoId}
                     usuarioActualId={usuarioActualId}
                     esAdministrador={esAdministrador}
-                    onEliminar={eliminarMatrimonio}
+                    onCambiarEstado={cambiarEstado}
                   />
                 ))}
               </tbody>
@@ -639,8 +653,8 @@ export default function TablaMatrimonios({
                   "
                 >
                   {lista.map((matrimonio) => {
-                    const eliminando =
-                      eliminandoId === matrimonio.id;
+                    const procesando =
+                      procesandoId === matrimonio.id;
 
                     const puedeAdministrar =
                       puedeAdministrarMatrimonio(
@@ -742,11 +756,11 @@ export default function TablaMatrimonios({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  eliminarMatrimonio(
+                                  cambiarEstado(
                                     matrimonio,
                                   )
                                 }
-                                disabled={eliminando}
+                                disabled={procesando}
                                 className="
                                   inline-flex min-h-12
                                   w-full items-center
@@ -765,11 +779,11 @@ export default function TablaMatrimonios({
                                   disabled:opacity-60
                                 "
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Power className="h-4 w-4" />
 
-                                {eliminando
-                                  ? "Eliminando..."
-                                  : "Eliminar"}
+                                {procesando
+                                  ? (matrimonio.activo ? "Desactivando..." : "Reactivando...")
+                                  : matrimonio.activo ? "Desactivar" : "Reactivar"}
                               </button>
                             </div>
                           ) : (
@@ -795,10 +809,10 @@ export default function TablaMatrimonios({
 function FragmentMinisterio({
   ministerio,
   lista,
-  eliminandoId,
+  procesandoId,
   usuarioActualId,
   esAdministrador,
-  onEliminar,
+  onCambiarEstado,
 }: FragmentMinisterioProps) {
   return (
     <>
@@ -842,8 +856,8 @@ function FragmentMinisterio({
       </tr>
 
       {lista.map((matrimonio) => {
-        const eliminando =
-          eliminandoId === matrimonio.id;
+        const procesando =
+          procesandoId === matrimonio.id;
 
         const puedeAdministrar =
           puedeAdministrarMatrimonio(
@@ -967,9 +981,9 @@ function FragmentMinisterio({
                   <button
                     type="button"
                     onClick={() =>
-                      onEliminar(matrimonio)
+                      onCambiarEstado(matrimonio)
                     }
-                    disabled={eliminando}
+                    disabled={procesando}
                     className="
                       inline-flex min-h-11
                       items-center justify-center
@@ -987,12 +1001,12 @@ function FragmentMinisterio({
                       disabled:opacity-60
                     "
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Power className="h-4 w-4" />
 
                     <span className="hidden 2xl:inline">
-                      {eliminando
-                        ? "Eliminando..."
-                        : "Eliminar"}
+                      {procesando
+                        ? (matrimonio.activo ? "Desactivando..." : "Reactivando...")
+                        : matrimonio.activo ? "Desactivar" : "Reactivar"}
                     </span>
                   </button>
                 </div>

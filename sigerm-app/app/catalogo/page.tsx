@@ -1,3 +1,4 @@
+import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import { redirect } from "next/navigation";
 import {
   Package2,
@@ -29,6 +30,8 @@ function obtenerDisponibles(
 }
 
 export default async function CatalogoPage() {
+  await requerirPermiso(PERMISOS.VER_CATALOGO, "/catalogo");
+
   const supabase = await createClient();
 
   const {
