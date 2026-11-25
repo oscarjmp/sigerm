@@ -35,7 +35,7 @@ BEGIN
     END IF;
 
     -- P-2 Políticas exactas auditadas
-    SELECT string_agg(p.polname || ':' || p.polcmd::text, ' | ' ORDER BY p.polname)
+    SELECT string_agg(p.polname || ':' || p.polcmd::text, ' | ' ORDER BY p.polname COLLATE "C")
       INTO v_text
       FROM pg_policy p
      WHERE p.polrelid = 'storage.objects'::regclass;
@@ -118,7 +118,7 @@ DECLARE
 BEGIN
     SELECT string_agg(p.polname || ':' || p.polcmd::text || ':' ||
                       array_to_string(ARRAY(SELECT r::regrole::text FROM unnest(p.polroles) r), '+'),
-                      ' | ' ORDER BY p.polname)
+                      ' | ' ORDER BY p.polname COLLATE "C")
       INTO v_text
       FROM pg_policy p
      WHERE p.polrelid = 'storage.objects'::regclass;

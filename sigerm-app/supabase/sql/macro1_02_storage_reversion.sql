@@ -20,7 +20,7 @@ BEGIN
         RAISE EXCEPTION 'Abortado R-1: % no puede administrar políticas de storage.objects', current_user;
     END IF;
 
-    SELECT string_agg(p.polname || ':' || p.polcmd::text, ' | ' ORDER BY p.polname)
+    SELECT string_agg(p.polname || ':' || p.polcmd::text, ' | ' ORDER BY p.polname COLLATE "C")
       INTO v_text
       FROM pg_policy p
      WHERE p.polrelid = 'storage.objects'::regclass;
@@ -57,7 +57,7 @@ DO $post$
 DECLARE
     v_text text;
 BEGIN
-    SELECT string_agg(p.polname || ':' || p.polcmd::text, ' | ' ORDER BY p.polname)
+    SELECT string_agg(p.polname || ':' || p.polcmd::text, ' | ' ORDER BY p.polname COLLATE "C")
       INTO v_text
       FROM pg_policy p
      WHERE p.polrelid = 'storage.objects'::regclass;

@@ -41,7 +41,7 @@ BEGIN
             ('ministerios',      'Permitir actualizar ministerios:w,Permitir eliminar ministerios:d,Permitir insertar ministerios:a,Permitir lectura ministerios:r')
         ) AS t(tabla, esperado)
     LOOP
-        SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname)
+        SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname COLLATE "C")
           INTO v_text
           FROM pg_policy p
          WHERE p.polrelid = ('public.' || r.tabla)::regclass;
@@ -263,7 +263,7 @@ BEGIN
             ('ministerios',      'ministerios_insert_gestion:a,ministerios_select_perfil_activo:r,ministerios_update_gestion:w')
         ) AS t(tabla, esperado)
     LOOP
-        SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname)
+        SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname COLLATE "C")
           INTO v_text
           FROM pg_policy p
          WHERE p.polrelid = ('public.' || r.tabla)::regclass

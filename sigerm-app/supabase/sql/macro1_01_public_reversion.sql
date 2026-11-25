@@ -30,7 +30,7 @@ BEGIN
             ('ministerios',      'ministerios_insert_gestion:a,ministerios_select_perfil_activo:r,ministerios_update_gestion:w')
         ) AS t(tabla, esperado)
     LOOP
-        SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname)
+        SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname COLLATE "C")
           INTO v_text
           FROM pg_policy p
          WHERE p.polrelid = ('public.' || r.tabla)::regclass;
@@ -139,7 +139,7 @@ BEGIN
         RAISE EXCEPTION 'Revertido: no se restauró EXECUTE de funciones';
     END IF;
 
-    SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname) INTO v_text
+    SELECT string_agg(p.polname || ':' || p.polcmd::text, ',' ORDER BY p.polname COLLATE "C") INTO v_text
       FROM pg_policy p WHERE p.polrelid = 'public.prestamos'::regclass;
     IF v_text IS DISTINCT FROM 'prestamos_delete:d,prestamos_insert:a,prestamos_select:r,prestamos_update:w' THEN
         RAISE EXCEPTION 'Revertido: políticas de prestamos = %', v_text;
