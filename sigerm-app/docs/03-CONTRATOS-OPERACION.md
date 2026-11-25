@@ -1,14 +1,15 @@
-# SIGERM — consolidación MACRO-INTEGRATION-01
+# SIGERM — consolidación MACRO-INTEGRATION-02
 
 Fecha: 25 de noviembre de 2026.
 Worktree: C:\Users\Usuario\Documents\GitHub\sigerm-codex.
 Rama: feature/encuentros.
-Base: 347d66e8af12b4cc5b70033253b52b165dc4e888.
+Base integrada: 802d59cecbe0b7721c73c47d7a76bc2e832a4cc0.
 
 Este documento sustituye los estados provisionales de DEV-01/02/03.
 Los cuatro módulos son exclusivos del Administrador en esta etapa.
-No se integran ramas ni se modifican producción, roles, RLS o seguridad
-de usuarios. El commit local está autorizado; no se autoriza push/despliegue.
+La integración local mediante rebase está autorizada. No se modifica
+producción ni se ejecuta SQL; no se autoriza push, integración con main
+ni despliegue. Se preservan las correcciones de seguridad de Claude.
 
 ## Funcionalidad consolidada
 
@@ -91,7 +92,7 @@ SHA256 de referencia: 20D752E794BB63534304BA594D1991F727D8D1590915A1323D6FFBF465
 Las cuatro páginas y cada Server Action usan requerirAdministradorOperacion,
 que primero reutiliza requerirPermiso y después exige ROLES.ADMINISTRADOR.
 El cliente también oculta la interfaz para otros roles. No basta con ocultar
-botones. No se modificaron lib/auth, roles ni la matriz compartida.
+botones. Se conserva la matriz de Claude; no se conceden permisos a otros roles.
 
 | Módulo | Permiso de lectura | Alta / edición | Condición adicional |
 | --- | --- | --- | --- |
@@ -106,9 +107,9 @@ La correspondencia específica de permisos de Participantes debe ratificarse
 con Claude, sin habilitar otros roles en esta etapa.
 
 lib/operacion/permisos.ts exporta navegacionOperacion con las cuatro rutas
-y soloAdministrador=true, preparado para el Sidebar futuro. Claude debe
-aplicar tanto el permiso existente como la condición de Administrador.
-No se modificó components/layout/Sidebar.tsx para evitar superponer su trabajo.
+y soloAdministrador=true. Sidebar ya consume esas entradas y comprueba tanto
+el permiso existente como el rol Administrador. Se preservan sus enlaces
+previos y el Sidebar móvil reutiliza el mismo componente.
 
 ## Errores y confirmación
 
@@ -128,13 +129,13 @@ No se modificó components/layout/Sidebar.tsx para evitar superponer su trabajo.
 
 ## Verificación final
 
-Se aprovechó la suite previa de 108 pruebas y se añadieron 36 de K-2,
-edición parcial, errores, Administrador y acceso a páginas antes de consultas.
+Se conservaron las 144 pruebas anteriores y se agregaron 30 pruebas de
+integración del menú, permisos, middleware e integridad de scripts.
 
-- Pruebas: 144 aprobadas, 0 fallidas.
+- Pruebas: 174 aprobadas, 0 fallidas.
 - TypeScript: aprobado.
 - ESLint del bloque: aprobado, sin errores ni advertencias.
-- ESLint completo: 1 error preexistente en UsuarioForm.tsx:75; 0 advertencias, pendiente de Claude.
+- ESLint completo: aprobado, 0 errores y 0 advertencias; corrección de UsuarioForm conservada desde 802d59c.
 - Build aislado completo: aprobado, compilación, TypeScript y generación de páginas 20/20.
 - git diff --check: sin errores de espacios.
 
@@ -157,7 +158,7 @@ datos por fetch/http/https; solo permite Google Fonts. No crea .env.local.
 Los placeholders no son credenciales. No publicar esos artefactos: requieren
 recompilación con configuración autorizada en el proceso de integración.
 
-## Dependencias pendientes de Claude
+## Dependencias y acuerdos de producción
 
 1. Confirmar/aplicar privilegios y RLS de los cuatro módulos, solo Administrador,
    y acceso a los catálogos existentes. Las denegaciones pueden verse como
@@ -168,8 +169,8 @@ recompilación con configuración autorizada en el proceso de integración.
 3. Mantener K-2 compatible con las políticas de UPDATE y los null históricos.
    Validar actividad/visibilidad de nuevas referencias de forma atómica si
    se requiere proteger contra desactivación concurrente.
-4. Resolver UsuarioForm.tsx:75, react-hooks/set-state-in-effect. Ese archivo
-   gestiona usuarios/roles/activo y no fue modificado por Codex.
+4. Resuelto localmente: UsuarioForm.tsx:75 fue corregido por Claude en
+   802d59c y se conserva sin modificaciones adicionales.
 5. Acordar prevención de sobrescrituras por edición concurrente; no hay campo
    de versión/updated_at en estas tablas. No se inventó uno.
 6. Confirmar procedencia y vigencia del contrato original y reglas de
@@ -182,7 +183,7 @@ recompilación con configuración autorizada en el proceso de integración.
 
 ## Inventario para integración
 
-Contenido funcional propio: 30 archivos nuevos y 7 archivos compartidos
+Contenido del commit funcional original: 30 archivos nuevos y 7 archivos compartidos
 modificados (37 archivos previstos para el commit).
 
 Nuevos:
@@ -199,23 +200,64 @@ Compartidos que requieren revisar diffs con Claude:
 - components/matrimonios/MatrimonioForm.tsx: únicamente carga de ministerios.
 - components/inventario/ArticuloForm.tsx: únicamente vista previa Next Image.
 - lib/pdf/prestamoPdf.ts: únicamente tipado de lastAutoTable.
-- Sidebar.tsx: futura integración; sin cambios desde Codex.
+- Sidebar.tsx: integrado en esta etapa; controles exclusivos de Administrador.
 
 Se excluyen CSV de metadatos, .env, credenciales, secretos, node_modules,
 .next, logs, tsbuildinfo y temporales mediante selección explícita de paths.
 No se usa git add indiscriminado. El CSV recibido se conserva sin modificar
 y permanece fuera del commit.
 
-## Estrategia futura, sin ejecutarla
+## Integración local realizada
 
-1. Claude consolida la seguridad y resuelve las dependencias anteriores.
-2. Revisar manualmente los siete archivos compartidos, Sidebar, nuevas rutas
-   y posibles coincidencias con security/macro1; conservar la seguridad de su autor.
-3. Integrar únicamente tras autorización humana, tomando la seguridad revisada
-   como base. No reemplazar archivos completos para resolver conflictos.
-4. Repetir verificaciones sobre el resultado integrado y realizar pruebas
-   de perfiles/RLS/concurrencia en el destino expresamente autorizado.
-5. Recompilar con configuración autorizada antes de cualquier publicación.
+- Claude: fa770150c70cf044f941bd4db70c9502b69aa167 y
+  802d59cecbe0b7721c73c47d7a76bc2e832a4cc0, conservados como ancestros.
+- Codex original: eb543807bc46bfb896bd541f891549a89590c92b.
+- Codex reaplicado: ff24ec73a3921b1f13863cb262b92a6cbe6cbdfb.
+- Rebase de feature/encuentros sobre security/macro1 completado sin conflictos.
+  git range-diff confirmó que el parche funcional se conservó idéntico.
+- Los archivos de seguridad, UsuarioForm, middleware, matriz de permisos,
+  .gitignore y SQL son idénticos a los de 802d59c.
+- Los 16 hashes de SHA256SUMS coinciden con los bytes de los scripts locales.
+  Esta comprobación solo lee archivos; no ejecuta SQL.
+- Sidebar incorpora Encuentros, Participantes, Equipos de servicio y
+  Configuración. Exige sesión, permiso de lectura y rol Administrador.
+  El Sidebar móvil reutiliza el mismo componente.
+- Conservados K-2, altas con referencias obligatorias, ediciones históricas
+  parciales, bajas lógicas existentes, errores 23505/23503 y ausencia de
+  borrado físico en los nuevos módulos.
+- La regla de Claude ignora el CSV recuperado. No se versionan CSV,
+  credenciales, secretos ni artefactos temporales.
 
-El commit local consolida el bloque funcional, no acredita seguridad remota
-ni autoriza integración, push o despliegue.
+### Resultado integrado
+
+174 pruebas aprobadas, 0 fallidas: 144 previas y 30 de integración.
+TypeScript aprobado. ESLint general aprobado, 0 errores y 0 advertencias.
+Build aislado aprobado: compilación, tipos, generación 20/20 y optimización
+final. No se utilizaron datos reales ni conexiones a Supabase en las pruebas.
+
+Las pruebas nuevas cubren Sidebar por rol, permisos retirados a otros
+perfiles, sesiones, rutas protegidas anidadas, conservación de cookies,
+enlace activo e integridad de los scripts.
+
+### Cambios adicionales al commit funcional original
+
+- components/layout/Sidebar.tsx
+- lib/operacion/permisos.ts
+- tests/integracion.test.cjs
+- docs/03-CONTRATOS-OPERACION.md
+
+El commit definitivo de esta etapa se registra encima del commit funcional
+reaplicado; su identificador se obtiene con git log -1.
+
+### Límites y pendientes externos
+
+No hay bloqueos para la integración local. Los scripts RLS, privilegios,
+FK e integridad UNIQUE están incorporados como archivos, pero no se ejecutaron.
+Su aplicación y validación remota requieren autorización independiente.
+Los ensayos locales no certifican el estado actual de la base de producción.
+
+No se modificó el worktree de Claude; permanece en security/macro1.
+No se hizo push, merge con main, rebase de otra rama ni despliegue.
+No se crearon copias ni worktrees adicionales. El siguiente paso productivo
+debe autorizarse por separado y recompilarse con configuración apropiada;
+los artefactos del build ficticio no deben desplegarse.

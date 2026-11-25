@@ -13,11 +13,11 @@ export const escrituraOperacion = {
   configuracion: [PERMISOS.ADMINISTRAR_CONFIGURACION, PERMISOS.ADMINISTRAR_CONFIGURACION],
 } as const;
 
-// Integracion futura en Sidebar: las cuatro entradas exigen Administrador,
+// Entradas del Sidebar: las cuatro exigen Administrador,
 // ademas del permiso existente. No ampliar la matriz de roles compartida.
 export const navegacionOperacion = [
   { nombre: "Encuentros", href: rutasOperacion.encuentros, permiso: lecturaOperacion.encuentros, soloAdministrador: true },
   { nombre: "Participantes", href: rutasOperacion.participantes, permiso: lecturaOperacion.participantes, soloAdministrador: true },
   { nombre: "Equipos de servicio", href: rutasOperacion.equipos, permiso: lecturaOperacion.equipos, soloAdministrador: true },
-  { nombre: "Configuracion", href: rutasOperacion.configuracion, permiso: lecturaOperacion.configuracion, soloAdministrador: true },
+  { nombre: "Configuraci\u00f3n", href: rutasOperacion.configuracion, permiso: lecturaOperacion.configuracion, soloAdministrador: true },
 ] as const;

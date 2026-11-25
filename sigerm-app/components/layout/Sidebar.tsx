@@ -5,17 +5,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarDays,
   ClipboardList,
   HandHelping,
   LayoutDashboard,
   LogOut,
   Package2,
+  Settings,
   ShieldCheck,
   ShoppingBag,
   Users,
   Warehouse,
 } from "lucide-react";
 
+import { ROLES } from "@/lib/constants/roles";
+import { navegacionOperacion } from "@/lib/operacion/permisos";
 import { useAuth } from "@/lib/hooks/useAuth";
 import {
   PERMISOS,
@@ -33,12 +37,15 @@ type MenuItem = {
   href: string;
   icon: IconoMenu;
   permiso: Permiso;
+  soloAdministrador?: boolean;
 };
 
-/*
- * Encuentros, Servidores y Configuración se incorporarán en MACRO 4.
- * Se retiran del menú mientras sus páginas no existan (evita enlaces 404).
- */
+const iconosOperacion = {
+  "/encuentros": CalendarDays,
+  "/participantes": Users,
+  "/equipos-servicio": HandHelping,
+  "/configuracion": Settings,
+};
 const menus: MenuItem[] = [
   {
     name: "Dashboard",
@@ -76,6 +83,13 @@ const menus: MenuItem[] = [
     icon: Users,
     permiso: PERMISOS.VER_MATRIMONIOS,
   },
+  ...navegacionOperacion.map((item) => ({
+    name: item.nombre,
+    href: item.href,
+    icon: iconosOperacion[item.href],
+    permiso: item.permiso,
+    soloAdministrador: item.soloAdministrador,
+  })),
   {
     name: "Reportes",
     href: "/reportes/inventario",
@@ -105,6 +119,7 @@ export default function Sidebar() {
 
   const {
     puede,
+    rol,
     cargando,
     estaAutenticado,
     cerrarSesion,
@@ -113,7 +128,8 @@ export default function Sidebar() {
   const menusPermitidos =
     !cargando && estaAutenticado
       ? menus.filter((item) =>
-          puede(item.permiso),
+          puede(item.permiso) &&
+          (!item.soloAdministrador || rol === ROLES.ADMINISTRADOR),
         )
       : [];
 
