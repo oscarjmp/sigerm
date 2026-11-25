@@ -4,10 +4,14 @@ import { NextResponse, type NextRequest } from "next/server";
 const RUTAS_PROTEGIDAS = [
   "/administracion",
   "/catalogo",
+  "/configuracion",
   "/dashboard",
+  "/encuentros",
+  "/equipos-servicio",
   "/inventario",
   "/kardex",
   "/matrimonios",
+  "/participantes",
   "/prestamos",
   "/reportes",
 ];

@@ -50,3 +50,6 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Metadatos recuperados de producción (políticas, privilegios): no versionar
+docs/SIGERM-METADATOS-*.csv

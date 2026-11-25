@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -71,13 +70,17 @@ export default function UsuarioForm({
 
   const esEdicion = modo === "editar";
 
-  useEffect(() => {
-    setFormulario(
-      construirFormularioInicial(modo, usuario),
-    );
+  // Reinicia el formulario cuando cambian el modo o el usuario editado.
+  // Se ajusta durante el render (patrón recomendado por React) en lugar
+  // de hacerlo en un efecto, para evitar un render intermedio con datos
+  // del usuario anterior.
+  const [origen, setOrigen] = useState({ modo, usuario });
 
+  if (origen.modo !== modo || origen.usuario !== usuario) {
+    setOrigen({ modo, usuario });
+    setFormulario(construirFormularioInicial(modo, usuario));
     setErrores([]);
-  }, [modo, usuario]);
+  }
 
   const puedeGuardar = useMemo(() => {
     const datosBasicosValidos =

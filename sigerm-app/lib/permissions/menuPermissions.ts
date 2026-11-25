@@ -32,17 +32,12 @@ export const PERMISOS_POR_ROL: Record<
     PERMISOS.EDITAR_PRESTAMO,
     PERMISOS.REGISTRAR_DEVOLUCION,
 
-    PERMISOS.VER_ENCUENTROS,
-    PERMISOS.CREAR_ENCUENTRO,
-    PERMISOS.EDITAR_ENCUENTRO,
+    // Encuentros, Participantes y Equipos de servicio: exclusivos del
+    // Administrador en la primera publicación (RLS: políticas *_admin).
 
     PERMISOS.VER_MATRIMONIOS,
     PERMISOS.CREAR_MATRIMONIO,
     PERMISOS.EDITAR_MATRIMONIO,
-
-    PERMISOS.VER_SERVIDORES,
-    PERMISOS.CREAR_SERVIDOR,
-    PERMISOS.EDITAR_SERVIDOR,
 
     PERMISOS.VER_REPORTES,
   ],
@@ -69,13 +64,9 @@ export const PERMISOS_POR_ROL: Record<
   [ROLES.SECRETARIA]: [
     PERMISOS.VER_CATALOGO,
 
-    PERMISOS.VER_ENCUENTROS,
-
     PERMISOS.VER_MATRIMONIOS,
     PERMISOS.CREAR_MATRIMONIO,
     PERMISOS.EDITAR_MATRIMONIO,
-
-    PERMISOS.VER_SERVIDORES,
   ],
 
   // =====================================================
