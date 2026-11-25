@@ -47,6 +47,12 @@ type Ministerio = {
   nombre: string;
 };
 
+async function consultarMinisterios(): Promise<Ministerio[]> {
+  const { data, error } = await obtenerMinisterios();
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Ministerio[];
+}
+
 function limpiarTelefono(valor: string): string {
   return valor.replace(/\D/g, "").slice(0, 10);
 }
@@ -103,16 +109,7 @@ export default function MatrimonioForm({
   const cargarMinisterios =
     useCallback(async () => {
       try {
-        const { data, error } =
-          await obtenerMinisterios();
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        setMinisterios(
-          (data ?? []) as Ministerio[],
-        );
+        setMinisterios(await consultarMinisterios());
       } catch (error) {
         console.error(
           "Error al consultar ministerios:",
@@ -126,8 +123,14 @@ export default function MatrimonioForm({
     }, []);
 
   useEffect(() => {
-    void cargarMinisterios();
-  }, [cargarMinisterios]);
+    let vigente = true;
+    consultarMinisterios().then((datos) => {
+      if (vigente) setMinisterios(datos);
+    }).catch(() => {
+      if (vigente) notificar.error("No fue posible cargar los ministerios.");
+    });
+    return () => { vigente = false; };
+  }, []);
 
   /*
    * Libera la URL temporal creada para la

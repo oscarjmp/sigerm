@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import autoTable, { type Table } from "jspdf-autotable";
 
 type PrestamoPDF = {
   folio: string;
@@ -121,7 +121,7 @@ export function generarPrestamoPDF(
   // =========================
 
   const finalY =
-    (doc as any).lastAutoTable.finalY + 25;
+    ((doc as jsPDF & { lastAutoTable?: Table }).lastAutoTable?.finalY ?? 180) + 25;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);

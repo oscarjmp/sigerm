@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase/client";
@@ -382,7 +383,10 @@ export default function ArticuloForm({
 
           <div className="col-span-2 flex justify-center mt-4">
 
-            <img
+            <Image
+              width={288}
+              height={288}
+              unoptimized
               src={preview}
               alt="Vista previa"
               className="

@@ -1,298 +1,82 @@
 "use client";
-
 import React, { useMemo, useState } from "react";
+import SearchInput from "./SearchInput";
 
 type Columna<T> = {
   key: keyof T | string;
   titulo: string;
   render?: (fila: T) => React.ReactNode;
 };
-
 type Props<T> = {
   data: T[];
   columns: Columna<T>[];
   buscarEn?: (keyof T)[];
   mensajeVacio?: string;
   agruparPor?: keyof T;
-  tituloGrupo?: (
-    valor: any,
-    cantidad: number
-  ) => React.ReactNode;
+  tituloGrupo?: (valor: unknown, cantidad: number) => React.ReactNode;
+  titulo?: string;
+  mostrarBuscador?: boolean;
 };
-
-export default function DataTable<
-  T extends Record<string, any>
->({
-  data,
-  columns,
-  buscarEn = [],
-  mensajeVacio = "No existen registros.",
-  agruparPor,
-  tituloGrupo,
+function normalizar(valor: unknown) {
+  return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").trim();
+}
+export default function DataTable<T extends object>({
+  data, columns, buscarEn = [], mensajeVacio = "No existen registros.",
+  agruparPor, tituloGrupo, titulo = "Directorio", mostrarBuscador = true,
 }: Props<T>) {
-
-  const [buscar, setBuscar] =
-    useState("");
-
-  const [gruposAbiertos, setGruposAbiertos] =
-    useState<Record<string, boolean>>({});
-
+  const [buscar, setBuscar] = useState("");
+  const [gruposAbiertos, setGruposAbiertos] = useState<Record<string, boolean>>({});
   const registros = useMemo(() => {
-
-    if (!buscar.trim()) return data;
-
-    const texto = buscar.toLowerCase();
-
-    return data.filter((fila) =>
-      buscarEn.some((campo) =>
-        String(fila[campo] ?? "")
-          .toLowerCase()
-          .includes(texto)
-      )
-    );
-
-  }, [buscar, data, buscarEn]);
-
-  const grupos = useMemo(() => {
-
-    if (!agruparPor) return null;
-
-    const mapa = new Map<any, T[]>();
-
-    registros.forEach((fila) => {
-
-      const llave =
-        fila[agruparPor] ?? "Sin grupo";
-
-      if (!mapa.has(llave)) {
-
-        mapa.set(llave, []);
-
-      }
-
-      mapa.get(llave)!.push(fila);
-
+    const texto = normalizar(buscar);
+    if (!texto) return data;
+    return data.filter(fila => {
+      const campos = buscarEn.length ? buscarEn : Object.keys(fila) as (keyof T)[];
+      return campos.some(campo => normalizar(fila[campo]).includes(texto));
     });
-
-    return Array.from(mapa.entries());
-
+  }, [buscar, buscarEn, data]);
+  const grupos = useMemo(() => {
+    if (!agruparPor) return null;
+    const mapa = new Map<unknown, T[]>();
+    for (const fila of registros) {
+      const llave = fila[agruparPor] ?? "Sin grupo";
+      const filas = mapa.get(llave) ?? [];
+      filas.push(fila);
+      mapa.set(llave, filas);
+    }
+    return [...mapa.entries()];
   }, [registros, agruparPor]);
-
-  function cambiarGrupo(
-    grupo: string
-  ) {
-
-    setGruposAbiertos((anterior) => ({
-
-      ...anterior,
-
-      [grupo]: !anterior[grupo],
-
-    }));
-
+  function pintarFila(fila: T, indice: number) {
+    return <tr key={(fila as { id?: string | number }).id ?? indice} className="border-t hover:bg-slate-50">
+      {columns.map(columna => <td key={String(columna.key)} className="max-w-xs break-words px-4 py-4 text-sm sm:px-6">
+        {columna.render ? columna.render(fila) : String((fila as Record<string, unknown>)[String(columna.key)] ?? "—")}
+      </td>)}
+    </tr>;
   }
-
-  function pintarFila(
-    fila: T,
-    indice: number
-  ) {
-
-    return (
-
-      <tr
-        key={fila.id ?? indice}
-        className="
-          border-t
-          hover:bg-slate-50
-          transition-all
-        "
-      >
-
-        {columns.map((columna) => (
-
-          <td
-            key={String(columna.key)}
-            className="px-6 py-4"
-          >
-
-            {columna.render
-              ? columna.render(fila)
-              : String(
-                  fila[columna.key] ?? "-"
-                )}
-
-          </td>
-
-        ))}
-
-      </tr>
-
-    );
-
-  }
-
- return (
-
-  <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-
-    {/* Barra superior */}
-
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-5 border-b">
-
-      <input
-        type="text"
-        placeholder="🔍 Buscar..."
-        value={buscar}
-        onChange={(e) =>
-          setBuscar(e.target.value)
-        }
-        className="
-          w-full
-          md:w-96
-          rounded-xl
-          border
-          border-gray-300
-          px-4
-          py-3
-          focus:outline-none
-          focus:ring-2
-          focus:ring-[#3483FA]
-        "
-      />
-
-      <span className="text-sm text-gray-500">
-
-        {registros.length} registro(s)
-
-      </span>
-
+  return <div className="overflow-hidden rounded-2xl bg-white shadow-lg">
+    <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
+      {mostrarBuscador && <SearchInput aria-label={"Buscar en " + titulo.toLocaleLowerCase("es")} placeholder="Buscar…" value={buscar} onChange={e => setBuscar(e.target.value)} />}
+      <p role="status" aria-live="polite" className="text-sm text-slate-500">{registros.length} registro(s)</p>
     </div>
-
-    {/* Tabla */}
-
-    <div className="overflow-x-auto">
-
+    <div role="region" aria-label={titulo} tabIndex={0} className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-blue-500">
       <table className="min-w-full">
-
-        <thead className="bg-gray-100">
-
-          <tr>
-
-            {columns.map((columna) => (
-
-              <th
-                key={String(columna.key)}
-                className="text-left px-6 py-4"
-              >
-
-                {columna.titulo}
-
-              </th>
-
-            ))}
-
-          </tr>
-
-        </thead>
-
-<tbody>
-
-  {registros.length === 0 ? (
-
-    <tr>
-
-      <td
-        colSpan={columns.length}
-        className="text-center py-16 text-gray-400"
-      >
-
-        {mensajeVacio}
-
-      </td>
-
-    </tr>
-
-  ) : grupos ? (
-
-    grupos.map(([grupo, filas]) => {
-
-      const abierto =
-        gruposAbiertos[String(grupo)] ?? true;
-
-      return (
-
-        <React.Fragment
-          key={String(grupo)}
-        >
-
-          <tr
-            className="
-              bg-slate-100
-              cursor-pointer
-              hover:bg-slate-200
-              transition
-            "
-            onClick={() =>
-              cambiarGrupo(String(grupo))
-            }
-          >
-
-            <td
-              colSpan={columns.length}
-              className="px-6 py-4"
-            >
-
-              <div className="flex items-center justify-between">
-
-                <div className="flex items-center gap-3">
-
-                  <span className="text-lg">
-
-                    {abierto ? "▼" : "▶"}
-
-                  </span>
-
-                  <span className="font-bold text-slate-700">
-
-                    {tituloGrupo
-                      ? tituloGrupo(
-                          grupo,
-                          filas.length
-                        )
-                      : `${grupo} (${filas.length})`}
-
-                  </span>
-
-                </div>
-
-              </div>
-
-            </td>
-
-          </tr>
-
-          {abierto &&
-            filas.map(pintarFila)}
-
-        </React.Fragment>
-
-      );
-
-    })
-
-  ) : (
-
-    registros.map(pintarFila)
-
-  )}
-
-</tbody>
-        </table>
-
-      </div>
-
+        <caption className="sr-only">{titulo}</caption>
+        <thead className="bg-slate-100"><tr>{columns.map(columna => <th scope="col" key={String(columna.key)} className="px-4 py-4 text-left text-sm sm:px-6">{columna.titulo}</th>)}</tr></thead>
+        <tbody>{!registros.length ? <tr><td colSpan={columns.length} className="px-4 py-12 text-center text-slate-500">{mensajeVacio}</td></tr>
+          : grupos ? grupos.map(([grupo, filas], indice) => {
+            const llave = typeof grupo + ":" + String(grupo) + ":" + indice;
+            const abierto = gruposAbiertos[llave] ?? true;
+            return <React.Fragment key={llave}>
+              <tr className="border-t bg-slate-100"><td colSpan={columns.length}>
+                <button type="button" aria-expanded={abierto} onClick={() => setGruposAbiertos(actual => ({ ...actual, [llave]: !abierto }))}
+                  className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left font-bold text-slate-700 hover:bg-slate-200 focus-visible:outline-2 sm:px-6">
+                  <span aria-hidden="true">{abierto ? "▼" : "▶"}</span>
+                  {tituloGrupo ? tituloGrupo(grupo, filas.length) : String(grupo) + " (" + filas.length + ")"}
+                </button>
+              </td></tr>
+              {abierto && filas.map(pintarFila)}
+            </React.Fragment>;
+          }) : registros.map(pintarFila)}</tbody>
+      </table>
     </div>
-
-  );
-
+  </div>;
 }
