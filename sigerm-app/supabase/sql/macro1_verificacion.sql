@@ -17,6 +17,9 @@ SELECT schemaname, tablename, policyname, cmd, roles::text, qual, with_check
 --   movimientos:      "Administrador y Coordinador consultan movimientos" (SELECT)   ← Y.2
 --   storage.objects:  2 SELECT públicas + matrimonios_fotos_insert_gestion
 --                     + articulos_imagenes_{insert,update,delete}_admin
+--                     En producción, creadas desde el Dashboard, llevan
+--                     sufijo: "... 1o9u66w_0" (matrimonios) y "... 99a5fc_0"
+--                     (articulos); validar por operación, rol y expresión.
 
 -- V-2 Matriz de privilegios efectivos (anon / authenticated)
 SELECT c.relname,

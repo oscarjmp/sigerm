@@ -3,6 +3,31 @@
 -- VERSIÓN PARA SOLICITAR AUTORIZACIÓN. NO EJECUTADA.
 -- Restaura las políticas auditadas el 18-nov-2026.
 -- ADVERTENCIA: reabre R1 (subida anónima al bucket matrimonios) y R5.
+--
+-- Versión 2 (MACRO-INTEGRATION-PUBLISH-01, 26-nov-2026): S1/S2 se
+-- aplicaron en producción desde Dashboard > Storage > Policies, que
+-- añadió sufijos a los nombres. R-2 y los DROP usan los nombres reales:
+--   "matrimonios_fotos_insert_gestion 1o9u66w_0"
+--   "articulos_imagenes_insert_admin 99a5fc_0"
+--   "articulos_imagenes_update_admin 99a5fc_0"
+--   "articulos_imagenes_delete_admin 99a5fc_0"
+--
+-- LIMITACIÓN DEL EJECUTOR: storage.objects pertenece a
+-- supabase_storage_admin y postgres (SQL Editor) NO es miembro de ese
+-- rol, por lo que R-1 aborta sin aplicar nada. En ese caso la reversión
+-- se realiza desde Dashboard > Storage > Policies, en este orden:
+--   1. Crear en el bucket matrimonios, INSERT, rol public (por defecto),
+--      expresión: bucket_id = 'matrimonios'
+--   2. Crear en el bucket articulos, para authenticated:
+--      INSERT  WITH CHECK bucket_id = 'articulos'
+--      UPDATE  USING      bucket_id = 'articulos'
+--      DELETE  USING      bucket_id = 'articulos'
+--   3. Eliminar las cuatro políticas con sufijo listadas arriba y las
+--      SELECT auxiliares que el Dashboard añada (sufijo _1).
+--   4. Verificar con el bloque $post$ (solo lectura) o con la sección 03
+--      de sec_db01_v2_diagnostico.sql. Los nombres de las políticas
+--      recreadas también recibirán sufijos; validar por operación, rol
+--      y expresión.
 -- =====================================================================
 BEGIN;
 
@@ -25,16 +50,16 @@ BEGIN
       FROM pg_policy p
      WHERE p.polrelid = 'storage.objects'::regclass;
     IF v_text IS DISTINCT FROM
-       'Permitir ver fotografías 1o9u66w_0:r | Permitir ver imágenes:r | articulos_imagenes_delete_admin:d | articulos_imagenes_insert_admin:a | articulos_imagenes_update_admin:w | matrimonios_fotos_insert_gestion:a' THEN
-        RAISE EXCEPTION 'Abortado R-2: el estado no es el de MACRO 1: "%"', v_text;
+       'Permitir ver fotografías 1o9u66w_0:r | Permitir ver imágenes:r | articulos_imagenes_delete_admin 99a5fc_0:d | articulos_imagenes_insert_admin 99a5fc_0:a | articulos_imagenes_update_admin 99a5fc_0:w | matrimonios_fotos_insert_gestion 1o9u66w_0:a' THEN
+        RAISE EXCEPTION 'Abortado R-2: el estado no es el de MACRO 1 en producción: "%"', v_text;
     END IF;
 END
 $pre$;
 
-DROP POLICY matrimonios_fotos_insert_gestion ON storage.objects;
-DROP POLICY articulos_imagenes_insert_admin  ON storage.objects;
-DROP POLICY articulos_imagenes_update_admin  ON storage.objects;
-DROP POLICY articulos_imagenes_delete_admin  ON storage.objects;
+DROP POLICY "matrimonios_fotos_insert_gestion 1o9u66w_0" ON storage.objects;
+DROP POLICY "articulos_imagenes_insert_admin 99a5fc_0"   ON storage.objects;
+DROP POLICY "articulos_imagenes_update_admin 99a5fc_0"   ON storage.objects;
+DROP POLICY "articulos_imagenes_delete_admin 99a5fc_0"   ON storage.objects;
 
 CREATE POLICY "Permitir subir fotografías 1o9u66w_0" ON storage.objects
     AS PERMISSIVE FOR INSERT TO public

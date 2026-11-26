@@ -5,6 +5,9 @@
 -- valores nulos, unicidad y capacidad de inscripciones; solo conteos).
 -- Versión 2.2 (MACRO-SECURITY-FINAL): mensajes de las secciones 09 y 21
 -- alineados con la instantánea v2 y con macro1_01 (sin cambios de consulta).
+-- Versión 2.3 (MACRO-INTEGRATION-PUBLISH-01): la sección 18, fila 05,
+-- espera los nombres reales de Storage con los sufijos que añadió el
+-- Dashboard de Supabase al aplicar S1/S2 en producción (26-nov-2026).
 -- Transacción READ ONLY terminada en ROLLBACK. Una sola consulta SELECT
 -- sobre catálogos del sistema; los conteos usan SELECT count(*) generados
 -- con identificadores entrecomillados (query_to_xml). No devuelve nombres
@@ -117,7 +120,7 @@ esperado_m1 (orden, correccion, objeto, pre, post) AS (
         'Administrador y Coordinador consultan movimientos:r'),
     (5, '02-S1/S2 storage.objects: políticas', 'storage.objects',
         'Permitir actualizar imágenes:w,Permitir borrar imágenes:d,Permitir subir fotografías 1o9u66w_0:a,Permitir subir imágenes:a,Permitir ver fotografías 1o9u66w_0:r,Permitir ver imágenes:r',
-        'Permitir ver fotografías 1o9u66w_0:r,Permitir ver imágenes:r,articulos_imagenes_delete_admin:d,articulos_imagenes_insert_admin:a,articulos_imagenes_update_admin:w,matrimonios_fotos_insert_gestion:a')
+        'Permitir ver fotografías 1o9u66w_0:r,Permitir ver imágenes:r,articulos_imagenes_delete_admin 99a5fc_0:d,articulos_imagenes_insert_admin 99a5fc_0:a,articulos_imagenes_update_admin 99a5fc_0:w,matrimonios_fotos_insert_gestion 1o9u66w_0:a')
 ),
 priv_m1 (orden, correccion, actual, pre, post) AS (
     SELECT 6, '01-S4/S5/S6 anon sin privilegios en prestamos, detalle_prestamo y ministerios',
