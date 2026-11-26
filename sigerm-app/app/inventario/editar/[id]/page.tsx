@@ -3,6 +3,7 @@ import { requerirPermiso } from "@/lib/auth/requerirPermiso";
 import ArticuloForm from "@/components/inventario/ArticuloForm";
 import MainLayout from "@/components/layout/MainLayout";
 import { createClient } from "@/lib/supabase/server";
+import { cargarPrestamosReales } from "@/lib/inventario/prestamosReales";
 import { notFound } from "next/navigation";
 
 export default async function EditarArticuloPage({
@@ -26,6 +27,9 @@ export default async function EditarArticuloPage({
     notFound();
   }
 
+  // Préstamos reales vigentes del artículo (null si no se pudieron consultar).
+  const prestamos = await cargarPrestamosReales(supabase, id);
+
   return (
     <MainLayout>
       <div className="mb-8">
@@ -34,7 +38,10 @@ export default async function EditarArticuloPage({
         </h1>
       </div>
 
-      <ArticuloForm articulo={articulo} />
+      <ArticuloForm
+        articulo={articulo}
+        prestamosReales={prestamos ? prestamos.get(id) ?? 0 : null}
+      />
     </MainLayout>
   );
 }

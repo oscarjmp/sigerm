@@ -1,40 +1,41 @@
+import {
+  ETIQUETA_SITUACION,
+  clasificarExistencias,
+  normalizarExistencias,
+  porcentajeDisponible,
+} from "@/lib/inventario/existencias";
+
 type IndicadorExistenciasProps = {
   cantidad: number | null;
   disponibles: number | null;
+  activo?: boolean | null;
+  /** Unidades en préstamos vigentes reales; si no se conocen, se omite. */
+  prestamosReales?: number | null;
 };
 
-function normalizarNumero(
-  valor: number | null,
-): number {
-  return Math.max(valor ?? 0, 0);
-}
+const CLASE_SITUACION = {
+  disponible: "bg-emerald-100 text-emerald-700",
+  sin_disponibilidad: "bg-rose-100 text-rose-700",
+  agotado: "bg-red-100 text-red-700",
+  inactivo: "bg-slate-200 text-slate-600",
+} as const;
 
 export default function IndicadorExistencias({
   cantidad,
   disponibles,
+  activo,
+  prestamosReales,
 }: IndicadorExistenciasProps) {
-  const total = normalizarNumero(cantidad);
-  const disponiblesActuales = Math.min(
-    normalizarNumero(disponibles),
-    total,
-  );
-
-  const prestados = Math.max(
-    total - disponiblesActuales,
-    0,
-  );
-
-  const porcentajeDisponible =
-    total > 0
-      ? Math.round(
-          (disponiblesActuales / total) * 100,
-        )
-      : 0;
+  const articulo = { cantidad, disponibles, activo };
+  const n = normalizarExistencias(articulo, prestamosReales);
+  const situacion = clasificarExistencias(articulo);
+  const porcentaje = porcentajeDisponible(articulo);
+  const prestados = n.prestamosReales ?? n.comprometidas;
 
   const claseBarra =
-    porcentajeDisponible === 0
+    porcentaje === 0
       ? "bg-rose-500"
-      : porcentajeDisponible <= 25
+      : porcentaje <= 25
         ? "bg-amber-500"
         : "bg-emerald-500";
 
@@ -47,23 +48,17 @@ export default function IndicadorExistencias({
           </p>
 
           <p className="mt-1 text-2xl font-bold text-slate-900">
-            {disponiblesActuales}
+            {n.disponibles}
             <span className="ml-1 text-sm font-medium text-slate-500">
-              de {total}
+              de {n.cantidad}
             </span>
           </p>
         </div>
 
         <span
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-            disponiblesActuales > 0
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-rose-100 text-rose-700"
-          }`}
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${CLASE_SITUACION[situacion]}`}
         >
-          {disponiblesActuales > 0
-            ? "Disponible"
-            : "Sin existencias"}
+          {ETIQUETA_SITUACION[situacion]}
         </span>
       </div>
 
@@ -71,18 +66,23 @@ export default function IndicadorExistencias({
         <div
           className={`h-full rounded-full transition-all ${claseBarra}`}
           style={{
-            width: `${porcentajeDisponible}%`,
+            width: `${porcentaje}%`,
           }}
         />
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
         <span>
-          {porcentajeDisponible}% disponible
+          {porcentaje}% disponible
         </span>
 
         <span>
-          {prestados} prestados
+          {prestados} en préstamos
+          {n.porConciliar ? (
+            <span className="ml-2 font-semibold text-amber-700">
+              · {Math.abs(n.porConciliar)} por conciliar
+            </span>
+          ) : null}
         </span>
       </div>
     </section>

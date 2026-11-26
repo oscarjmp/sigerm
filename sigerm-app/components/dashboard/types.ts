@@ -7,6 +7,7 @@ export type ArticuloDashboard = {
   disponibles: number | null;
   estado: string | null;
   imagen: string | null;
+  activo?: boolean | null;
 };
 
 export type MetadataMovimientoDashboard = {
@@ -57,7 +58,14 @@ export type ResumenDashboard = {
   prestamosActivos: number;
   prestamosDevueltos: number;
   articulosMalEstado: number;
+  /** Activos sin existencias o con todas las unidades prestadas. */
   articulosSinDisponibilidad: number;
+  /** Activos con existencia 0 (incluidos en articulosSinDisponibilidad). */
+  articulosAgotados: number;
+  articulosInactivos: number;
+  /** Diferencia entre lo registrado como prestado y los préstamos reales. */
+  unidadesPorConciliar: number;
+  articulosPorConciliar: number;
   movimientosRegistrados: number;
 };
 
@@ -98,5 +106,5 @@ export type AlertaInventario = {
   cantidad: number;
   disponibles: number;
   imagen: string | null;
-  nivel: "agotado" | "critico" | "bajo";
+  nivel: "agotado" | "sin_disponibilidad" | "critico" | "bajo";
 };

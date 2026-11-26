@@ -6,6 +6,8 @@ import BotonImprimir from "@/components/reportes/BotonImprimir";
 
 import { PERMISOS } from "@/lib/permissions/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { normalizarExistencias } from "@/lib/inventario/existencias";
+import { cargarPrestamosReales } from "@/lib/inventario/prestamosReales";
 
 type ArticuloReporte = {
   id: string;
@@ -80,6 +82,9 @@ export default async function ReporteInventario() {
       error.message,
     );
   }
+
+  const prestamosReales =
+    await cargarPrestamosReales(supabase);
 
   const articulos =
     (data ?? []) as ArticuloReporte[];
@@ -340,12 +345,25 @@ export default async function ReporteInventario() {
                               articulo.disponibles,
                             );
 
-                          const prestados =
-                            Math.max(
-                              existenciaTotal -
-                                disponibles,
-                              0,
+                          /*
+                           * Prestados = préstamos reales vigentes. La
+                           * diferencia con lo registrado se muestra como
+                           * "por conciliar" (no se corrige aquí).
+                           */
+                          const existencias =
+                            normalizarExistencias(
+                              articulo,
+                              prestamosReales
+                                ? prestamosReales.get(articulo.id) ?? 0
+                                : null,
                             );
+
+                          const prestados =
+                            existencias.prestamosReales ??
+                            existencias.comprometidas;
+
+                          const porConciliar =
+                            existencias.porConciliar ?? 0;
 
                           return (
                             <tr
@@ -386,6 +404,11 @@ export default async function ReporteInventario() {
 
                               <td className="border p-3 text-center font-semibold text-amber-700">
                                 {prestados}
+                                {porConciliar !== 0 && (
+                                  <span className="block text-xs font-normal text-amber-800">
+                                    {Math.abs(porConciliar)} por conciliar
+                                  </span>
+                                )}
                               </td>
 
                               <td className="border p-3 text-center">

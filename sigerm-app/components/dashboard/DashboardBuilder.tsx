@@ -96,7 +96,9 @@ export function DashboardBuilder({
           valor={resumen.articulosSinDisponibilidad.toLocaleString(
             "es-MX",
           )}
-          descripcion="Requieren atención"
+          descripcion={`${resumen.articulosAgotados.toLocaleString("es-MX")} agotados · ${(
+            resumen.articulosSinDisponibilidad - resumen.articulosAgotados
+          ).toLocaleString("es-MX")} todo prestado`}
           color="red"
           icono={
             <AlertTriangle
@@ -106,6 +108,19 @@ export function DashboardBuilder({
           }
         />
       </section>
+
+      {resumen.unidadesPorConciliar > 0 && (
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          <strong>Inventario por conciliar:</strong>{" "}
+          {resumen.unidadesPorConciliar.toLocaleString("es-MX")} unidades en{" "}
+          {resumen.articulosPorConciliar.toLocaleString("es-MX")} artículos figuran
+          como prestadas sin un préstamo vigente que lo justifique. Revíselas con
+          «AJUSTAR INVENTARIO» en la ficha de cada artículo.
+        </div>
+      )}
 
       <SectionCard
         titulo="Inteligencia operativa"

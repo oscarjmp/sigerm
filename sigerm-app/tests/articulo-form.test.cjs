@@ -14,7 +14,8 @@ const ARTICULO = {
   imagen: "https://ejemplo.invalid/articulos/anterior.jpg",
 };
 const CLAVE = `sigerm:borrador-articulo:${ARTICULO.id}`;
-const COLUMNAS_PERMITIDAS = ["cantidad", "categoria", "codigo", "estado", "imagen", "nombre"];
+// En edición la existencia ya no se envía: se cambia con el ajuste de inventario (RPC atómica).
+const COLUMNAS_PERMITIDAS = ["categoria", "codigo", "estado", "imagen", "nombre"];
 
 // --- Entorno de navegador mínimo -----------------------------------------
 let almacen;
@@ -123,10 +124,10 @@ function montar({ articulo: articuloDado = ARTICULO, nuevo = false, supabase }) 
 
 // --- Pruebas ----------------------------------------------------------------
 
-test("con sesión válida actualiza solo las 6 columnas permitidas y confirma una fila", async () => {
+test("con sesión válida actualiza solo las columnas descriptivas (sin existencia) y confirma una fila", async () => {
   const { cliente, r } = supabaseSimulado();
   const v = montar({ supabase: cliente });
-  v.escribir(10, "7");
+  v.escribir("SILLA PLEGABLE", "SILLA PLEGABLE GRIS");
   await v.guardar();
   assert.equal(r.escrituras.length, 1);
   const [w] = r.escrituras;
@@ -142,7 +143,8 @@ test("con sesión válida actualiza solo las 6 columnas permitidas y confirma un
     ["eq", "imagen", ARTICULO.imagen],
   ], "la actualización se condiciona a los valores originales");
   assert.equal(w.select, "id");
-  assert.equal(w.datos.cantidad, 7);
+  assert.equal("cantidad" in w.datos, false, "la existencia nunca se escribe directamente");
+  assert.equal(w.datos.nombre, "SILLA PLEGABLE GRIS");
   assert.equal(r.renovaciones, 0);
   assert.deepEqual(v.avisos.at(-1), ["exito", "Artículo actualizado correctamente."]);
   assert.deepEqual(v.navegacion, ["/inventario"]);
@@ -168,13 +170,12 @@ test("sin sesión no sube fotos ni escribe, conserva lo capturado y lleva al ini
   const { cliente, r } = supabaseSimulado({ usuario: null, renovado: null });
   const v = montar({ supabase: cliente });
   v.escribir("SILLA PLEGABLE", "SILLA PLEGABLE NEGRA");
-  v.escribir(10, "4");
   v.elegirFoto();
   await v.guardar();
   assert.equal(r.renovaciones, 1);
   assert.deepEqual(r.subidas, []);
   assert.deepEqual(r.escrituras, []);
-  assert.deepEqual(JSON.parse(almacen.get(CLAVE)), { codigo: "MOB-001", nombre: "SILLA PLEGABLE NEGRA", categoria: "MOBILIARIO", cantidad: 4, estado: "Bueno" });
+  assert.deepEqual(JSON.parse(almacen.get(CLAVE)), { codigo: "MOB-001", nombre: "SILLA PLEGABLE NEGRA", categoria: "MOBILIARIO", cantidad: 10, estado: "Bueno" });
   assert.deepEqual(v.navegacion, [`/login?redirectTo=${encodeURIComponent(`/inventario/editar/${ARTICULO.id}`)}`]);
   assert.equal(v.avisos.at(-1)[0], "error");
   assert.match(v.avisos.at(-1)[1], /sesión expiró.*conservaron/);
@@ -188,7 +189,7 @@ test("al volver, el borrador se ofrece y se recupera solo con la acción de la u
   assert.ok(v.campo("SILLA PLEGABLE"), "sin acción no se sobrescriben los datos");
   v.boton("Recuperar datos").props.onClick();
   assert.ok(v.campo("SILLA PLEGABLE NEGRA"));
-  assert.ok(v.campo(4));
+  assert.ok(v.elementos().find(e => e.type === "select" && e.props.value === "Regular"), "estado recuperado");
   assert.equal(almacen.has(CLAVE), false);
   assert.equal(v.boton("Recuperar datos"), undefined);
   assert.equal(v.avisos.at(-1)[0], "info");
@@ -246,7 +247,7 @@ test("si la actualización afecta 0 filas (RLS) no informa éxito y retira la fo
 test("CONCURRENCIA: si otra persona modificó el artículo no se sobrescribe y se conserva lo capturado", async () => {
   const { cliente, r } = supabaseSimulado({ resultado: { data: [], error: null }, vigente: { id: ARTICULO.id } });
   const v = montar({ supabase: cliente });
-  v.escribir(10, "3");
+  v.escribir("SILLA PLEGABLE", "SILLA ROJA");
   v.elegirFoto("nueva.jpg");
   await v.guardar();
   assert.equal(r.escrituras.filter(w => w.op === "update").length, 1);
@@ -254,8 +255,8 @@ test("CONCURRENCIA: si otra persona modificó el artículo no se sobrescribe y s
   const [tipo, mensaje] = v.avisos.at(-1);
   assert.equal(tipo, "error");
   assert.match(mensaje, /Otra persona modificó este artículo/);
-  assert.equal(JSON.parse(almacen.get(CLAVE)).cantidad, 3, "borrador conservado para recuperarlo tras recargar");
-  assert.ok(v.campo(3), "los datos siguen en pantalla");
+  assert.equal(JSON.parse(almacen.get(CLAVE)).nombre, "SILLA ROJA", "borrador conservado para recuperarlo tras recargar");
+  assert.ok(v.campo("SILLA ROJA"), "los datos siguen en pantalla");
   assert.equal(r.retiradas.length, 1, "la fotografía subida se retira");
   assert.deepEqual(v.navegacion, []);
 });
@@ -350,19 +351,38 @@ test("si falla la subida de la foto no se escribe el artículo", async () => {
   assert.equal(v.avisos.at(-1)[0], "error");
 });
 
-test("un artículo nuevo se inserta con las mismas columnas y confirma una fila", async () => {
+test("un artículo nuevo se da de alta con alta_articulo_admin (disponibles = existencia y Kardex ALTA)", async () => {
   const { cliente, r } = supabaseSimulado();
-  cliente.rpc = async (nombre, args) => { r.rpc = [nombre, args]; return { data: "MES-001", error: null }; };
+  r.rpcs = [];
+  cliente.rpc = async (nombre, args) => {
+    r.rpcs.push([nombre, args]);
+    if (nombre === "generar_codigo_articulo") return { data: "MES-001", error: null };
+    return { data: { success: true, articulo: { id: "nuevo-id", cantidad: args.p_cantidad, disponibles: args.p_cantidad } }, error: null };
+  };
   const v = montar({ nuevo: true, supabase: cliente });
   const categoria = v.elementos().find(e => e.type === "select" && e.props.value === "");
   await categoria.props.onChange({ target: { value: "MESAS" } });
-  assert.deepEqual(r.rpc, ["generar_codigo_articulo", { categoria: "MESAS" }]);
   const nombre = v.elementos().find(e => e.type === "input" && e.props.value === "" && e.props.onChange);
   nombre.props.onChange({ target: { value: "Mesa plegable" } });
+  const existencia = v.elementos().find(e => e.type === "input" && e.props["aria-label"] === "Existencia inicial");
+  assert.equal(existencia.props.min, 0, "se permite dar de alta con 0 existencias");
+  existencia.props.onChange({ target: { value: "0" } });
   await v.guardar();
-  assert.equal(r.escrituras.length, 1);
-  assert.equal(r.escrituras[0].op, "insert");
-  assert.equal(r.escrituras[0].datos.codigo, "MES-001");
-  assert.deepEqual(Object.keys(r.escrituras[0].datos).sort(), COLUMNAS_PERMITIDAS);
-  assert.equal(r.escrituras[0].select, "id");
+  assert.deepEqual(r.escrituras, [], "sin INSERT directo");
+  const [nombreRpc, args] = r.rpcs.at(-1);
+  assert.equal(nombreRpc, "alta_articulo_admin");
+  assert.deepEqual(args, { p_codigo: "MES-001", p_nombre: "MESA PLEGABLE", p_categoria: "MESAS", p_cantidad: 0, p_estado: "Bueno", p_imagen: null });
+  assert.equal(v.avisos.at(-1)[0], "exito");
+});
+
+test("el alta rechazada por la base de datos no informa éxito", async () => {
+  const { cliente } = supabaseSimulado();
+  cliente.rpc = async nombre => nombre === "generar_codigo_articulo"
+    ? { data: "MES-002", error: null }
+    : { data: null, error: { code: "42501", message: "Solo un Administrador activo puede dar de alta artículos." } };
+  const v = montar({ nuevo: true, supabase: cliente });
+  await v.elementos().find(e => e.type === "select" && e.props.value === "").props.onChange({ target: { value: "MESAS" } });
+  v.elementos().find(e => e.type === "input" && e.props.value === "" && e.props.onChange).props.onChange({ target: { value: "Mesa" } });
+  await v.guardar();
+  assert.equal(v.avisos.at(-1)[0], "error");
 });

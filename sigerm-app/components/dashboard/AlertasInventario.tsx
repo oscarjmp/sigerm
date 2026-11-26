@@ -27,6 +27,16 @@ function obtenerEstiloNivel(
     };
   }
 
+  if (nivel === "sin_disponibilidad") {
+    return {
+      texto: "Sin disponibilidad",
+      badge: "bg-rose-100 text-rose-700",
+      borde: "border-rose-200",
+      fondo: "bg-rose-50/30",
+      disponibilidad: "text-rose-600",
+    };
+  }
+
   if (nivel === "critico") {
     return {
       texto: "Crítico",

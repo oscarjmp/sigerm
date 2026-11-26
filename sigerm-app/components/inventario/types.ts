@@ -10,6 +10,8 @@ export type ArticuloInventario = {
   ubicacion: string | null;
   unidad: string | null;
   activo: boolean | null;
+  /** Unidades en préstamos vigentes reales (null si no se pudieron consultar). */
+  prestamos_reales?: number | null;
 };
 
 export type VistaInventario =

@@ -180,6 +180,8 @@ export default function InventarioDetalle({
               <IndicadorExistencias
                 cantidad={articulo.cantidad}
                 disponibles={articulo.disponibles}
+                activo={articulo.activo}
+                prestamosReales={articulo.prestamos_reales}
               />
             </div>
 
@@ -247,6 +249,15 @@ export default function InventarioDetalle({
                   className="rounded-xl bg-slate-800 px-5 py-3 text-center font-semibold text-white transition hover:bg-slate-900"
                 >
                   Editar artículo
+                </Link>
+              )}
+
+              {puedeEditar && (
+                <Link
+                  href={`/inventario/editar/${articulo.id}#ajuste-inventario`}
+                  className="rounded-xl bg-amber-500 px-5 py-3 text-center font-semibold tracking-wide text-white transition hover:bg-amber-600 sm:col-span-2"
+                >
+                  AJUSTAR INVENTARIO
                 </Link>
               )}
             </section>

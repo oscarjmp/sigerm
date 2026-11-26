@@ -3,6 +3,12 @@
 import Image from "next/image";
 import { Package2, Plus, ShoppingCart } from "lucide-react";
 
+import {
+  ETIQUETA_SITUACION,
+  clasificarExistencias,
+  type SituacionExistencias,
+} from "@/lib/inventario/existencias";
+
 export type ArticuloCatalogo = {
   id: string;
   codigo: string;
@@ -33,26 +39,22 @@ function obtenerDisponibles(disponibles: number | null): number {
   return disponibles ?? 0;
 }
 
-function obtenerClaseDisponibilidad(disponibles: number): string {
-  if (disponibles <= 0) {
-    return "bg-red-100 text-red-700";
-  }
-
-  if (disponibles <= 5) {
-    return "bg-amber-100 text-amber-700";
-  }
+/*
+ * Agotado = existencia 0. Sin disponibilidad = hay existencias pero todas
+ * están prestadas. Ninguno de los dos se confunde con un artículo inactivo
+ * (los inactivos no aparecen en el catálogo).
+ */
+function obtenerClaseDisponibilidad(situacion: SituacionExistencias, disponibles: number): string {
+  if (situacion === "agotado") return "bg-red-100 text-red-700";
+  if (situacion === "sin_disponibilidad") return "bg-rose-100 text-rose-700";
+  if (disponibles <= 5) return "bg-amber-100 text-amber-700";
 
   return "bg-emerald-100 text-emerald-700";
 }
 
-function obtenerTextoDisponibilidad(disponibles: number): string {
-  if (disponibles <= 0) {
-    return "Agotado";
-  }
-
-  if (disponibles <= 5) {
-    return "Pocas unidades";
-  }
+function obtenerTextoDisponibilidad(situacion: SituacionExistencias, disponibles: number): string {
+  if (situacion !== "disponible") return ETIQUETA_SITUACION[situacion];
+  if (disponibles <= 5) return "Pocas unidades";
 
   return "Disponible";
 }
@@ -61,7 +63,8 @@ export default function TarjetaArticulo({
   articulo,
   onAgregar,
 }: TarjetaArticuloProps) {
-  const disponibles = obtenerDisponibles(articulo.disponibles);
+  const disponibles = Math.max(obtenerDisponibles(articulo.disponibles), 0);
+  const situacion = clasificarExistencias(articulo);
   const agotado = disponibles <= 0;
 
   function manejarAgregar() {
@@ -120,10 +123,10 @@ export default function TarjetaArticulo({
             absolute right-3 top-3
             rounded-full px-3 py-1.5
             text-xs font-bold shadow-sm
-            ${obtenerClaseDisponibilidad(disponibles)}
+            ${obtenerClaseDisponibilidad(situacion, disponibles)}
           `}
         >
-          {obtenerTextoDisponibilidad(disponibles)}
+          {obtenerTextoDisponibilidad(situacion, disponibles)}
         </span>
       </div>
 
@@ -203,7 +206,7 @@ export default function TarjetaArticulo({
               {agotado ? (
                 <>
                   <ShoppingCart className="h-4 w-4" />
-                  Agotado
+                  {ETIQUETA_SITUACION[situacion === "disponible" ? "sin_disponibilidad" : situacion]}
                 </>
               ) : (
                 <>

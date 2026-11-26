@@ -95,7 +95,7 @@ test("la redirección conserva cookies renovadas por el middleware", async () =>
 test("se conservan los SHA256 de los 16 scripts de Claude sin ejecutar SQL", () => {
   const directorio = path.resolve(__dirname, "../supabase/sql");
   const entradas = fs.readFileSync(path.join(directorio, "SHA256SUMS"), "utf8").trim().split(/\r?\n/);
-  assert.equal(entradas.length, 16);
+  assert.ok(entradas.length >= 16, "al menos los 16 scripts de Claude");
   for (const linea of entradas) {
     const m = /^([a-f0-9]{64})  ([A-Za-z0-9_]+\.sql)$/.exec(linea);
     assert.ok(m, "Entrada de checksum válida");

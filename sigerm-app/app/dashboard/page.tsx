@@ -23,6 +23,8 @@ import SigermHero from "@/components/ui/SigermHero";
 
 import { PERMISOS } from "@/lib/permissions/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { resumirInventario } from "@/lib/inventario/existencias";
+import { cargarPrestamosReales } from "@/lib/inventario/prestamosReales";
 
 const MESES_CORTOS = [
   "Ene",
@@ -326,8 +328,13 @@ function determinarNivelAlerta(
   cantidad: number,
   disponibles: number,
 ): AlertaInventario["nivel"] | null {
-  if (disponibles <= 0) {
+  // Agotado = sin existencias; sin disponibilidad = todo prestado.
+  if (cantidad <= 0) {
     return "agotado";
+  }
+
+  if (disponibles <= 0) {
+    return "sin_disponibilidad";
   }
 
   const porcentaje =
@@ -402,8 +409,9 @@ function construirAlertas(
     .sort((a, b) => {
       const prioridad = {
         agotado: 0,
-        critico: 1,
-        bajo: 2,
+        sin_disponibilidad: 1,
+        critico: 2,
+        bajo: 3,
       };
 
       return (
@@ -433,6 +441,7 @@ export default async function DashboardPage() {
     articulosResultado,
     prestamosResultado,
     movimientosResultado,
+    prestamosReales,
   ] = await Promise.all([
     supabase
       .from("articulos")
@@ -444,7 +453,8 @@ export default async function DashboardPage() {
         cantidad,
         disponibles,
         estado,
-        imagen
+        imagen,
+        activo
       `)
       .order("nombre", {
         ascending: true,
@@ -489,6 +499,8 @@ export default async function DashboardPage() {
         ascending: false,
       })
       .limit(2000),
+
+    cargarPrestamosReales(supabase),
   ]);
 
   const errores = [
@@ -528,34 +540,21 @@ export default async function DashboardPage() {
       .filter(Boolean),
   );
 
-  const existenciaTotal =
-    articulos.reduce(
-      (total, articulo) =>
-        total +
-        obtenerNumero(
-          articulo.cantidad,
-        ),
-      0,
-    );
-
-  const disponibles = articulos.reduce(
-    (total, articulo) =>
-      total +
-      Math.min(
-        obtenerNumero(
-          articulo.disponibles,
-        ),
-        obtenerNumero(
-          articulo.cantidad,
-        ),
-      ),
-    0,
+  /*
+   * Totales sobre artículos ACTIVOS; "prestados" sale de los préstamos
+   * reales vigentes (detalle de préstamos PRESTADO), no de la resta
+   * existencia - disponibles.
+   */
+  const inventario = resumirInventario(
+    articulos,
+    prestamosReales,
   );
 
-  const prestadosActualmente = Math.max(
-    existenciaTotal - disponibles,
-    0,
-  );
+  const {
+    existenciaTotal,
+    disponibles,
+    prestadosActualmente,
+  } = inventario;
 
   const prestamosActivos =
     prestamos.filter(
@@ -582,15 +581,15 @@ export default async function DashboardPage() {
     ).length;
 
   const articulosSinDisponibilidad =
-    articulos.filter(
-      (articulo) =>
-        obtenerNumero(
-          articulo.disponibles,
-        ) <= 0,
-    ).length;
+    inventario.articulosSinDisponibilidad +
+    inventario.articulosAgotados;
 
   const resumen: ResumenDashboard = {
-    totalArticulos: articulos.length,
+    totalArticulos: inventario.articulosActivos,
+    articulosAgotados: inventario.articulosAgotados,
+    articulosInactivos: inventario.articulosInactivos,
+    unidadesPorConciliar: inventario.unidadesPorConciliar,
+    articulosPorConciliar: inventario.articulosPorConciliar,
     totalCategorias: categorias.size,
     existenciaTotal,
     disponibles,
@@ -616,8 +615,11 @@ export default async function DashboardPage() {
       movimientos,
     );
 
-  const alertas =
-    construirAlertas(articulos);
+  const alertas = construirAlertas(
+    articulos.filter(
+      (articulo) => articulo.activo !== false,
+    ),
+  );
 
   return (
     <MainLayout>

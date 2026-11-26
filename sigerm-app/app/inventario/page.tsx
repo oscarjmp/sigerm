@@ -19,6 +19,7 @@ import MainLayout from "@/components/layout/MainLayout";
 
 import { PERMISOS } from "@/lib/permissions/permissions";
 import { createClient } from "@/lib/supabase/server";
+import { cargarPrestamosReales } from "@/lib/inventario/prestamosReales";
 
 function obtenerNumeroSeguro(
   valor: number | null | undefined,
@@ -57,8 +58,18 @@ export default async function InventarioPage() {
     );
   }
 
-  const articulos =
-    (data ?? []) as ArticuloInventario[];
+  // Préstamos reales vigentes por artículo (null si no se pudieron consultar).
+  const prestamosReales =
+    await cargarPrestamosReales(supabase);
+
+  const articulos = (
+    (data ?? []) as ArticuloInventario[]
+  ).map((articulo) => ({
+    ...articulo,
+    prestamos_reales: prestamosReales
+      ? prestamosReales.get(articulo.id) ?? 0
+      : null,
+  }));
 
   const articulosActivos = articulos.filter(
     (articulo) => articulo.activo !== false,

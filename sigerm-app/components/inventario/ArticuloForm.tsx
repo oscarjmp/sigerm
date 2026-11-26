@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 
 import { supabase } from "@/lib/supabase/client";
 import { notificar } from "@/lib/notificaciones";
+import {
+  ETIQUETA_SITUACION,
+  clasificarExistencias,
+  normalizarExistencias,
+} from "@/lib/inventario/existencias";
+
+import AjusteExistencias from "./AjusteExistencias";
 
 type Articulo = {
   id: string;
@@ -13,12 +20,36 @@ type Articulo = {
   nombre: string;
   categoria: string;
   cantidad: number;
+  disponibles?: number | null;
+  activo?: boolean | null;
   estado: string;
   imagen: string;
 };
 
+function ResumenExistencias({ articulo }: { articulo: Articulo }) {
+  const { cantidad, disponibles } = normalizarExistencias(articulo);
+  const situacion = clasificarExistencias(articulo);
+
+  return (
+    <div className="rounded-lg border p-3 text-sm">
+      <p className="font-semibold">
+        Existencia: {cantidad}{" "}
+        <span className="font-normal text-slate-500">
+          ({ETIQUETA_SITUACION[situacion]})
+        </span>
+      </p>
+      <p className="text-slate-600">Disponibles: {disponibles}</p>
+      <p className="text-xs text-slate-500">
+        Para cambiar existencias use «AJUSTAR INVENTARIO» (abajo).
+      </p>
+    </div>
+  );
+}
+
 type Props = {
   articulo?: Articulo;
+  /** Unidades en préstamos vigentes; null si no se pudieron consultar. */
+  prestamosReales?: number | null;
   cerrar?: () => void;
 };
 
@@ -135,6 +166,7 @@ function parsearBorrador(crudo: string | null): BorradorArticulo | null {
 
 export default function ArticuloForm({
   articulo,
+  prestamosReales = null,
   cerrar,
 }: Props) {
 
@@ -388,45 +420,62 @@ export default function ArticuloForm({
 
       }
 
-      const datos = {
-
-        codigo,
-
-        nombre: nombre.toUpperCase(),
-
-        categoria: categoria.toUpperCase(),
-
-        cantidad,
-
-        estado,
-
-        imagen: urlImagen,
-
-      };
-
       /*
-       * Se pide el id de vuelta para confirmar que se afectó exactamente
-       * un registro: con RLS, una escritura no autorizada puede afectar
-       * 0 filas sin devolver error.
+       * Edición: la existencia NO se envía aquí. Se modifica con el ajuste
+       * de existencias, que recalcula disponibles y registra Kardex de
+       * forma atómica. Se pide el id de vuelta para confirmar que se
+       * afectó exactamente un registro (con RLS, una escritura no
+       * autorizada puede afectar 0 filas sin error), y la actualización
+       * se condiciona a los valores originales (concurrencia optimista).
+       *
+       * Alta: mediante alta_articulo_admin (disponibles = cantidad y
+       * movimiento ALTA en Kardex, en una sola transacción).
        */
-      /*
-       * Control de concurrencia optimista: la actualización solo se
-       * aplica si el artículo conserva los valores con los que se abrió
-       * el formulario. Si otra persona lo modificó entretanto, se afecta
-       * 0 filas y no se sobrescriben sus cambios.
-       */
-      const { data: filas, error } = articulo
-        ? await condicionarAlOriginal(
-            supabase
-              .from("articulos")
-              .update(datos)
-              .eq("id", articulo.id),
-            articulo,
-          ).select("id")
-        : await supabase
+      let filas: { id: string }[] | null;
+      let error: { code?: string; message: string } | null;
+
+      if (articulo) {
+
+        const respuesta = await condicionarAlOriginal(
+          supabase
             .from("articulos")
-            .insert(datos)
-            .select("id");
+            .update({
+              codigo,
+              nombre: nombre.toUpperCase(),
+              categoria: categoria.toUpperCase(),
+              estado,
+              imagen: urlImagen,
+            })
+            .eq("id", articulo.id),
+          articulo,
+        ).select("id");
+
+        filas = respuesta.data;
+        error = respuesta.error;
+
+      } else {
+
+        const respuesta = await supabase.rpc(
+          "alta_articulo_admin",
+          {
+            p_codigo: codigo,
+            p_nombre: nombre.toUpperCase(),
+            p_categoria: categoria.toUpperCase(),
+            p_cantidad: cantidad,
+            p_estado: estado,
+            p_imagen: urlImagen || null,
+          },
+        );
+
+        error = respuesta.error;
+
+        const idNuevo = (
+          respuesta.data as { articulo?: { id?: string } } | null
+        )?.articulo?.id;
+
+        filas = error ? null : idNuevo ? [{ id: idNuevo }] : [];
+
+      }
 
       if (!error && articulo && filas && filas.length === 0) {
 
@@ -648,19 +697,31 @@ export default function ArticuloForm({
           <option>Otros</option>
 
         </select>
-                <input
-          type="number"
-          value={cantidad}
-          min={1}
-          onChange={(e) =>
-            setCantidad(Number(e.target.value))
-          }
-          className="
-            border
-            rounded-lg
-            p-3
-          "
-        />
+        {articulo ? (
+
+          <ResumenExistencias articulo={articulo} />
+
+        ) : (
+
+          <input
+            type="number"
+            aria-label="Existencia inicial"
+            value={cantidad}
+            min={0}
+            step={1}
+            onChange={(e) =>
+              setCantidad(
+                Math.max(Math.trunc(Number(e.target.value) || 0), 0)
+              )
+            }
+            className="
+              border
+              rounded-lg
+              p-3
+            "
+          />
+
+        )}
 
         <select
           value={estado}
@@ -823,6 +884,26 @@ export default function ArticuloForm({
         </button>
 
       </div>
+
+      {articulo && typeof prestamosReales === "number" && (
+
+        <AjusteExistencias
+          articulo={articulo}
+          prestamosReales={prestamosReales}
+          alActualizar={() => router.refresh()}
+        />
+
+      )}
+
+      {articulo && prestamosReales === null && (
+
+        <p role="alert" className="mt-8 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
+          No fue posible consultar los préstamos vigentes de este artículo, por lo
+          que el ajuste de inventario no está disponible en este momento.
+          Recargue la página para intentarlo de nuevo.
+        </p>
+
+      )}
 
     </div>
 

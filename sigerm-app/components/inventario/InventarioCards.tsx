@@ -311,6 +311,10 @@ export default function InventarioCards({
                   disponibles={
                     articulo.disponibles
                   }
+                  activo={articulo.activo}
+                  prestamosReales={
+                    articulo.prestamos_reales
+                  }
                 />
               </div>
 

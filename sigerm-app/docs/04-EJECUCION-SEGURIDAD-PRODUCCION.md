@@ -258,6 +258,51 @@ Sesiones simultáneas: Supabase Auth admite varias sesiones independientes
 por usuario. Cada inicio de sesión tiene su propia cadena de refresh
 tokens, y la aplicación no limita el número de dispositivos.
 
+## Ajuste y conciliación de inventario (INV-01, preparado el 26-nov-2026)
+
+**Diagnóstico en producción (solo lectura):**
+
+| Código | Existencia | Disponibles | Comprometidas (registro) | En préstamos reales | Por conciliar | Activo |
+|---|---|---|---|---|---|---|
+| DEC-0010 | 11 | 11 | 0 | 0 | 0 | no |
+| A008 | 36 | 10 | 26 | 0 | **26** | sí |
+| A009 | 400 | 1 | 399 | 0 | **399** | sí |
+
+A008 y A009 no tienen ningún préstamo, ni vigente ni histórico, ni
+movimientos de Kardex: la diferencia no está justificada. No existe
+ningún otro artículo con diferencias. El sistema no admite devoluciones
+parciales: `devolver_prestamo` devuelve el préstamo completo.
+
+**Causas:**
+- El formulario cambiaba `cantidad` sin poder tocar `disponibles` (sin
+  privilegio de columna) ni registrar Kardex. `disponibles <= cantidad`
+  impedía bajar a 0, y un aumento dejaba la disponibilidad desfasada.
+- Las altas por INSERT directo dejaban `disponibles = 0`.
+- Los módulos calculaban «prestados» como `cantidad - disponibles`.
+
+**Solución:**
+- `supabase/sql/inv_01_ajuste_existencias.sql`, pendiente de
+  autorización, crea:
+  - `ajustar_inventario_articulo`, solo para Administrador. Bloquea la
+    fila y recalcula `disponibles = existencia - préstamos PRESTADO`. Exige
+    que existencia y disponibles sigan como se mostraron (40001), usa una
+    clave de operación contra duplicados y registra el AJUSTE en Kardex
+    (anterior, nuevo, disponibles, motivo, observaciones, responsable,
+    fecha) en la misma transacción.
+  - `alta_articulo_admin`, que delega en `registrar_alta_articulo`.
+- Aplicación:
+  - botón **AJUSTAR INVENTARIO** en la ficha y en la edición del artículo;
+  - siete motivos;
+  - «Conciliar con la existencia actual» en un toque;
+  - acceso a Préstamos cuando hay préstamos vigentes.
+- Dashboard, Inventario, Catálogo y Reportes distinguen activo, inactivo,
+  agotado (existencia 0), sin disponibilidad (todo prestado) y unidades
+  por conciliar. «Prestados» proviene de los préstamos reales.
+
+**Orden de publicación obligatorio:** primero el SQL y después la
+aplicación. Sin las funciones, la versión nueva no puede dar de alta
+artículos ni ajustar inventario.
+
 ## Pendientes
 - Revisar en Dashboard > Authentication > Sessions si están activas la
   sesión única por usuario («single session per user»), el límite de
