@@ -146,7 +146,75 @@ Sin la clave:
   condiciones de Preview. El build anterior la definía con un valor
   ficticio y por eso no detectó el fallo.
 
+## Publicación en producción (26-nov-2026)
+
+- PR #4 (`release/integracion-macro1` → `main`): `main` avanzó directamente,
+  sin force, de `0b29dca` a `73513a61ea441cea31265e3b728ea87f7edd096d`,
+  el mismo commit validado en Vercel Preview. GitHub registró el PR como
+  integrado (19:53 UTC).
+- Vercel Production: «Deployment has completed». La Preview de
+  `73513a6` estaba Ready y protegida por Vercel Authentication. El build
+  anterior de Preview, de `bf3ac23`, falló por la falta de la clave
+  administrativa, lo que motivó `73513a6`.
+- Validación manual en Preview, como Administrador y contra la base de
+  datos de producción: los 11 módulos se visualizan y los datos coinciden
+  con la línea base. Sin sesión, las rutas protegidas redirigen al inicio
+  de sesión.
+
+Verificación posterior sin sesión en `sigerm.vercel.app`:
+
+| Ruta | Antes (0b29dca) | Después (73513a6) |
+|---|---|---|
+| `/` | 307 → /login | 307 → /login (archivos estáticos nuevos) |
+| `/login` | 200 | 200 (archivos estáticos nuevos) |
+| `/dashboard`, `/kardex`, `/inventario`, `/administracion/usuarios` | 307 → /login | 307 → /login |
+| `/encuentros`, `/participantes`, `/equipos-servicio`, `/configuracion` | 404 | 307 → /login |
+| `/registro` | n/d | 307 → /login |
+| `POST`/`PUT`/`DELETE /api/administracion/usuarios*` | n/d | 401 «No existe una sesión válida.» |
+
+La base de datos, tras el despliegue y en solo lectura, no cambió respecto
+de la línea base:
+- conteos: 115 / 31 / 11 / 13 / 10 / 14 / 3 / 6 / 3 / 0 / 0 / 26 / 2 / 0;
+- 135 objetos de Storage con las mismas huellas por bucket;
+- 887 existencias;
+- huellas de préstamos, matrimonios y usuarios idénticas;
+- huellas de las 4 funciones idénticas;
+- 32 políticas en `public` y 6 en Storage, con RLS activa en todas las
+  tablas y la restricción UNIQUE de participantes presente.
+
+Reversión de la aplicación: Instant Rollback de Vercel al despliegue de
+`0b29dca`. La base de datos es compatible con las dos versiones.
+
+## Matriz de acceso efectiva y coherencia con la interfaz
+
+Evaluada de forma estática a partir de las políticas y funciones de
+producción. El lector del MCP no puede adoptar el rol `authenticated`;
+en producción solo hay usuarios activos con rol Administrador.
+
+| Rol | Artículos | Matrimonios | Préstamos | Kardex | Módulos nuevos | Usuarios |
+|---|---|---|---|---|---|---|
+| Administrador | lectura y escritura | lectura y escritura | todos; RPC sí | lectura | lectura y escritura, sin borrado | todos |
+| Coordinador | lectura | lectura y escritura | propios | lectura | ninguno | propio |
+| Secretaría | lectura | lectura y escritura | propios | ninguno | ninguno | propio |
+| Inventario | lectura | solo activos | todos; RPC sí | ninguno | ninguno | propio |
+| Tesorería y Solicitante | lectura | ninguno | propios | ninguno | ninguno | propio |
+
+Incoherencias entre la interfaz y la base de datos (todas deniegan el
+acceso; ninguna expone datos):
+- Tesorería y Solicitante tienen `VER_MATRIMONIOS` en la interfaz, pero
+  sin política de lectura verán la lista vacía.
+- Coordinador tiene permisos de préstamo y devolución en la interfaz, pero
+  `registrar_prestamo` y `devolver_prestamo` solo admiten Administrador e
+  Inventario.
+- Coordinador puede leer `movimientos` en la base de datos, pero la
+  interfaz no le muestra el Kardex.
+
 ## Pendientes
+- Buscador del Catálogo: hoy anunciado como «Próximamente»
+  (`app/catalogo/page.tsx`).
+- Resolver las incoherencias de la matriz anterior.
+- Pruebas en vivo de los roles distintos de Administrador cuando existan
+  usuarios activos con esos roles.
 
 - SEC-02: bucket `matrimonios` público (listado y descarga sin sesión).
 - SEC-07: borrar un perfil deja préstamos, movimientos y matrimonios sin
