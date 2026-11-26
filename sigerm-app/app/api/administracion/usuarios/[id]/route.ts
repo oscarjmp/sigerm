@@ -611,6 +611,24 @@ export async function DELETE(
       );
     }
 
+    /*
+     * Igual que en PUT: se compara con el id devuelto por la
+     * base de datos, no con el parámetro de la URL, para que
+     * una variante de mayúsculas del mismo UUID no eluda la
+     * protección de la propia cuenta.
+     */
+    if (perfilAdministrador.id === usuarioObjetivo.id) {
+      return NextResponse.json(
+        {
+          error:
+            "No puede eliminar su propia cuenta.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
     const rolUsuarioObjetivo =
       obtenerPrimerRol(
         usuarioObjetivo.roles as RolRelacion,
