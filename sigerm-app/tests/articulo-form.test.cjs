@@ -275,12 +275,13 @@ test("dos administradores editando artículos distintos guardan ambos sin confli
   assert.equal(vb.avisos.at(-1)[0], "exito");
 });
 
-test("si la red falla tras subir la foto, se retira y se informa sin bloquear el botón", async () => {
+test("si la red falla tras subir la foto (resultado ambiguo) la foto se CONSERVA y se informa sin bloquear el botón", async () => {
   const { cliente, r } = supabaseSimulado({ resultado: () => { throw new Error("Failed to fetch"); } });
   const v = montar({ supabase: cliente });
   v.elegirFoto("nueva.jpg");
   await v.guardar();
-  assert.equal(r.retiradas.length, 1);
+  assert.deepEqual(r.retiradas, [], "sin certeza de que no se use, no se retira");
+  assert.equal(r.lecturas.filter(l => l.tipo === "referencias").length, 0, "ni siquiera se intenta: el resultado es incierto");
   assert.match(v.avisos.at(-1)[1], /Failed to fetch/);
   assert.equal(v.boton("Guardando"), undefined);
 });

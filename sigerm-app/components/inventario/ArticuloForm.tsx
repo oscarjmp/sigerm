@@ -484,8 +484,18 @@ export default function ArticuloForm({
 
     } catch (errorInesperado) {
 
+      /*
+       * Resultado AMBIGUO (p. ej. se perdió la conexión): la escritura
+       * pudo haberse confirmado en el servidor, incluso después de este
+       * punto. La fotografía subida NUNCA se retira aquí, porque su uso
+       * no puede descartarse; a lo sumo queda una fotografía sin usar.
+       * Solo se retira ante un fallo definitivo (error devuelto por la
+       * base de datos o 0 filas confirmadas), más arriba.
+       */
       if (fotoSubida) {
-        await eliminarFotoHuerfana(fotoSubida);
+        console.warn(
+          "[inventario] Resultado incierto: se conserva la fotografía subida.",
+        );
       }
 
       notificar.error(
