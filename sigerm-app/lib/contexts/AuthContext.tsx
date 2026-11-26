@@ -290,8 +290,17 @@ export function AuthProvider({
 
   const cerrarSesion =
     useCallback(async () => {
+      /*
+       * Cierre de sesión LOCAL: solo este dispositivo. El valor por
+       * defecto de supabase-js es "global" y revoca las sesiones de la
+       * cuenta en todos los dispositivos; con una cuenta compartida
+       * entre la oficina y un celular, cerrar sesión en uno dejaba al
+       * otro sin sesión válida ("permission denied for table ...") y
+       * en un ciclo de redirecciones. Las cuentas inactivas o sin
+       * perfil se siguen revocando globalmente (arriba).
+       */
       const { error } =
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: "local" });
 
       if (error) {
         throw new Error(

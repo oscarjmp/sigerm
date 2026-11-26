@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { rutaInternaSegura } from "@/lib/auth/redireccion";
+
 const RUTAS_PROTEGIDAS = [
   "/administracion",
   "/catalogo",
@@ -76,13 +78,40 @@ export async function updateSession(request: NextRequest) {
     return redirectResponse;
   }
 
-  // Usuario autenticado intentando regresar al inicio de sesión.
+  // Usuario con JWT válido que llega al inicio de sesión.
   if (usuarioAutenticado && pathname === "/login") {
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = "/dashboard";
-    dashboardUrl.search = "";
+    /*
+     * getClaims() verifica el JWT localmente (claves asimétricas) y no
+     * detecta una sesión revocada: por ejemplo, un cierre de sesión
+     * global desde otro dispositivo. Las páginas protegidas validan con
+     * getUser() y, en ese caso, envían a /login; si aquí se devolviera
+     * al dashboard sin más, se produciría ERR_TOO_MANY_REDIRECTS.
+     * En /login se confirma la sesión con el servidor de Auth y, si ya
+     * no existe, se borran solo las cookies locales de este navegador.
+     */
+    const {
+      data: { user },
+      error: errorUsuario,
+    } = await supabase.auth.getUser();
 
-    const redirectResponse = NextResponse.redirect(dashboardUrl);
+    if (errorUsuario || !user) {
+      await supabase.auth.signOut({ scope: "local" });
+
+      return response;
+    }
+
+    const destinoUrl = request.nextUrl.clone();
+    const destinoParseado = new URL(
+      rutaInternaSegura(
+        request.nextUrl.searchParams.get("redirectTo"),
+      ) ?? "/dashboard",
+      request.nextUrl.origin,
+    );
+
+    destinoUrl.pathname = destinoParseado.pathname;
+    destinoUrl.search = destinoParseado.search;
+
+    const redirectResponse = NextResponse.redirect(destinoUrl);
 
     response.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie);

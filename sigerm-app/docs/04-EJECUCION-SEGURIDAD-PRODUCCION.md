@@ -209,7 +209,59 @@ acceso; ninguna expone datos):
 - Coordinador puede leer `movimientos` en la base de datos, pero la
   interfaz no le muestra el Kardex.
 
+## Incidente de sesión (26-nov-2026): «permission denied» y ERR_TOO_MANY_REDIRECTS
+
+**Contexto.** La cuenta `admin@sigerm.com` estaba abierta a la vez en la
+computadora de la oficina y en un celular Android (Chrome). En el celular:
+1. Al guardar un artículo apareció «permission denied for table articulos».
+2. Al intentar entrar de nuevo, apareció ERR_TOO_MANY_REDIRECTS.
+
+**Causa raíz** (reproducida en `tests/sesion-navegacion.test.cjs`):
+1. «Cerrar sesión» llamaba a `supabase.auth.signOut()`, cuyo alcance por
+   defecto es **global**: revoca las sesiones de la cuenta en todos los
+   dispositivos. Una sesión también puede terminar por las políticas de
+   sesión de Supabase Auth (NO VERIFICADO: no son legibles con el MCP de
+   solo lectura).
+2. En el otro dispositivo, el access token seguía siendo válido hasta su
+   expiración (≤ 1 h). Al no poder renovarse, el cliente del navegador
+   quedaba sin sesión y sus peticiones viajaban como `anon`, que no tiene
+   privilegios sobre `articulos`. De ahí el error 42501.
+3. Ciclo de redirecciones, regresión de MACRO 1 (23d64ed, `requerirPermiso`):
+   - el middleware valida con `getClaims()`, que con claves asimétricas
+     verifica el JWT localmente y no detecta una sesión revocada;
+   - las páginas protegidas validan con `getUser()`, que sí la detecta, y
+     envían a `/login`;
+   - el middleware veía un JWT válido en `/login` y devolvía al dashboard,
+     y así sucesivamente.
+
+En 0b29dca no había autorización en las páginas y no existía el ciclo.
+
+**Corrección** (sin cambios en Supabase, RLS ni privilegios):
+- Middleware: en `/login` con un JWT presente se confirma la sesión con
+  `getUser()`. Si la sesión ya no existe, se borran solo las cookies de
+  ese navegador (`signOut({ scope: "local" })`) y se muestra el formulario.
+  Con sesión válida se respeta un `redirectTo` interno seguro
+  (`lib/auth/redireccion.ts`: sin dominios externos ni `/login`).
+- «Cerrar sesión» pasa a alcance **local**. Las cuentas inactivas o sin
+  perfil se siguen revocando globalmente.
+- Formulario de artículos:
+  - valida y, si caducó, renueva la sesión antes de escribir;
+  - sin sesión conserva lo capturado (borrador en `sessionStorage`, que
+    se ofrece recuperar) y lleva al inicio de sesión;
+  - traduce el error 42501 a un mensaje comprensible;
+  - confirma que se afectó exactamente una fila;
+  - retira la fotografía subida si el guardado falla;
+  - aplica concurrencia optimista: no sobrescribe cambios hechos por otra
+    persona mientras se editaba.
+
+Sesiones simultáneas: Supabase Auth admite varias sesiones independientes
+por usuario. Cada inicio de sesión tiene su propia cadena de refresh
+tokens, y la aplicación no limita el número de dispositivos.
+
 ## Pendientes
+- Revisar en Dashboard > Authentication > Sessions si están activas la
+  sesión única por usuario («single session per user»), el límite de
+  duración («time-box») o el cierre por inactividad.
 - Buscador del Catálogo: hoy anunciado como «Próximamente»
   (`app/catalogo/page.tsx`).
 - Resolver las incoherencias de la matriz anterior.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -21,6 +21,112 @@ type Props = {
   articulo?: Articulo;
   cerrar?: () => void;
 };
+
+type BorradorArticulo = {
+  codigo: string;
+  nombre: string;
+  categoria: string;
+  cantidad: number;
+  estado: string;
+};
+
+const PREFIJO_BORRADOR = "sigerm:borrador-articulo:";
+
+type FiltroIgualdad = {
+  eq(columna: string, valor: string | number): FiltroIgualdad;
+  is(columna: string, valor: null): FiltroIgualdad;
+};
+
+/*
+ * Añade a la consulta una condición por cada campo editable con el valor
+ * original del artículo (las columnas ya tienen SELECT para authenticated).
+ */
+function condicionarAlOriginal<T extends FiltroIgualdad>(
+  consulta: T,
+  original: Articulo,
+): T {
+  const campos: [string, string | number | null | undefined][] = [
+    ["codigo", original.codigo],
+    ["nombre", original.nombre],
+    ["categoria", original.categoria],
+    ["cantidad", original.cantidad],
+    ["estado", original.estado],
+    ["imagen", original.imagen],
+  ];
+
+  let q: FiltroIgualdad = consulta;
+
+  for (const [columna, valor] of campos) {
+    q = valor == null
+      ? q.is(columna, null)
+      : q.eq(columna, valor);
+  }
+
+  return q as T;
+}
+
+/*
+ * sessionStorage puede no existir o lanzar (modo privado, almacenamiento
+ * bloqueado); en ese caso simplemente no hay borrador.
+ */
+function guardarBorrador(clave: string, borrador: BorradorArticulo) {
+  try {
+    window.sessionStorage.setItem(clave, JSON.stringify(borrador));
+  } catch {
+    // Sin almacenamiento disponible: no se puede conservar el borrador.
+  }
+}
+
+function borrarBorrador(clave: string) {
+  try {
+    window.sessionStorage.removeItem(clave);
+  } catch {
+    // Sin almacenamiento disponible.
+  }
+}
+
+function leerBorradorCrudo(clave: string): string | null {
+  try {
+    return window.sessionStorage.getItem(clave);
+  } catch {
+    return null;
+  }
+}
+
+// sessionStorage no notifica cambios en la misma pestaña; tras recuperar o
+// descartar, el componente oculta el aviso con su propio estado.
+const suscribirSinCambios = () => () => {};
+
+function parsearBorrador(crudo: string | null): BorradorArticulo | null {
+  try {
+    if (!crudo) return null;
+
+    const valor: unknown = JSON.parse(crudo);
+    if (!valor || typeof valor !== "object") return null;
+
+    const b = valor as Record<string, unknown>;
+    if (
+      typeof b.codigo !== "string" ||
+      typeof b.nombre !== "string" ||
+      typeof b.categoria !== "string" ||
+      typeof b.cantidad !== "number" ||
+      !Number.isFinite(b.cantidad) ||
+      typeof b.estado !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      codigo: b.codigo,
+      nombre: b.nombre,
+      categoria: b.categoria,
+      cantidad: b.cantidad,
+      estado: b.estado,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function ArticuloForm({
   articulo,
@@ -96,6 +202,86 @@ export default function ArticuloForm({
 
   }
 
+  /*
+   * Borrador local de los datos capturados (sin la fotografía, que no
+   * puede serializarse). Se guarda antes de enviar al usuario a iniciar
+   * sesión y se recupera al volver a abrir el mismo formulario.
+   */
+  const claveBorrador =
+    `${PREFIJO_BORRADOR}${articulo?.id ?? "nuevo"}`;
+
+  const borradorCrudo = useSyncExternalStore(
+    suscribirSinCambios,
+    () => leerBorradorCrudo(claveBorrador),
+    () => null,
+  );
+
+  const [borradorResuelto, setBorradorResuelto] =
+    useState(false);
+
+  const borrador = borradorResuelto
+    ? null
+    : parsearBorrador(borradorCrudo);
+
+  function recuperarBorrador() {
+
+    if (!borrador) return;
+
+    setCodigo(borrador.codigo);
+    setNombre(borrador.nombre);
+    setCategoria(borrador.categoria);
+    setCantidad(borrador.cantidad);
+    setEstado(borrador.estado);
+
+    borrarBorrador(claveBorrador);
+    setBorradorResuelto(true);
+
+    notificar.info(
+      "Se recuperaron los datos capturados. Si había elegido una fotografía, selecciónela de nuevo."
+    );
+
+  }
+
+  function descartarBorrador() {
+
+    borrarBorrador(claveBorrador);
+    setBorradorResuelto(true);
+
+  }
+
+  async function sesionValida(): Promise<boolean> {
+
+    /*
+     * getUser() valida el token contra Supabase Auth. Si caducó y no se
+     * renovó automáticamente (frecuente en móviles tras inactividad), se
+     * intenta renovar de forma explícita una sola vez.
+     */
+    const { data } = await supabase.auth.getUser();
+
+    if (data?.user) return true;
+
+    const { data: renovada } =
+      await supabase.auth.refreshSession();
+
+    return Boolean(renovada?.user);
+
+  }
+
+  async function eliminarFotoHuerfana(nombreArchivo: string) {
+
+    const { error } = await supabase.storage
+      .from("articulos")
+      .remove([nombreArchivo]);
+
+    if (error) {
+      console.error(
+        "[inventario] No fue posible retirar la fotografía no utilizada.",
+        { mensaje: error.message },
+      );
+    }
+
+  }
+
   async function guardarArticulo() {
 
     if (!codigo || !nombre) {
@@ -110,121 +296,182 @@ export default function ArticuloForm({
 
     setGuardando(true);
 
-    /*
-     * Antes de escribir se valida (y, si caducó, se renueva) la sesión
-     * del navegador contra Supabase Auth. Si no hay sesión válida, la
-     * petición viajaría como "anon", que no tiene privilegios sobre
-     * articulos ("permission denied for table articulos"). En ese caso
-     * se pide iniciar sesión de nuevo en lugar de intentar la escritura.
-     */
-    const {
-      data: { user: usuarioSesion },
-    } = await supabase.auth.getUser();
+    let fotoSubida: string | null = null;
 
-    if (!usuarioSesion) {
+    try {
 
-      setGuardando(false);
+      /*
+       * Sin sesión válida la petición viajaría como "anon", que no tiene
+       * privilegios sobre articulos ("permission denied for table
+       * articulos"). Se conserva lo capturado y se pide iniciar sesión,
+       * antes de subir ninguna fotografía.
+       */
+      if (!(await sesionValida())) {
 
-      notificar.error(
-        "Su sesión expiró. Inicie sesión nuevamente para guardar los cambios."
-      );
+        guardarBorrador(claveBorrador, {
+          codigo,
+          nombre,
+          categoria,
+          cantidad,
+          estado,
+        });
 
-      router.push(
-        `/login?redirectTo=${encodeURIComponent(
-          articulo
-            ? `/inventario/editar/${articulo.id}`
-            : "/inventario"
-        )}`
-      );
+        notificar.error(
+          "Su sesión expiró. Sus datos se conservaron: inicie sesión nuevamente y vuelva a abrir el artículo para guardarlos."
+        );
 
-      return;
-
-    }
-
-    let urlImagen = articulo?.imagen ?? "";
-        if (imagen) {
-
-      const nombreArchivo =
-        `${Date.now()}-${imagen.name}`;
-
-      const { error: uploadError } =
-        await supabase.storage
-          .from("articulos")
-          .upload(nombreArchivo, imagen);
-
-      if (uploadError) {
-
-        notificar.error(uploadError.message);
-
-        setGuardando(false);
+        router.push(
+          `/login?redirectTo=${encodeURIComponent(
+            articulo
+              ? `/inventario/editar/${articulo.id}`
+              : "/inventario"
+          )}`
+        );
 
         return;
 
       }
 
-      urlImagen = supabase.storage
-        .from("articulos")
-        .getPublicUrl(nombreArchivo)
-        .data.publicUrl;
+      let urlImagen = articulo?.imagen ?? "";
 
-    }
+      if (imagen) {
 
-    let error;
+        const nombreArchivo =
+          `${Date.now()}-${imagen.name}`;
 
-    if (articulo) {
+        const { error: uploadError } =
+          await supabase.storage
+            .from("articulos")
+            .upload(nombreArchivo, imagen);
 
-      ({ error } = await supabase
-        .from("articulos")
-        .update({
+        if (uploadError) {
 
-          codigo,
+          notificar.error(uploadError.message);
 
-          nombre: nombre.toUpperCase(),
+          return;
 
-          categoria: categoria.toUpperCase(),
+        }
 
-          cantidad,
+        fotoSubida = nombreArchivo;
 
-          estado,
+        urlImagen = supabase.storage
+          .from("articulos")
+          .getPublicUrl(nombreArchivo)
+          .data.publicUrl;
 
-          imagen: urlImagen,
+      }
 
-        })
-        .eq("id", articulo.id));
+      const datos = {
 
-    } else {
+        codigo,
 
-      ({ error } = await supabase
-        .from("articulos")
-        .insert({
+        nombre: nombre.toUpperCase(),
 
-          codigo,
+        categoria: categoria.toUpperCase(),
 
-          nombre: nombre.toUpperCase(),
+        cantidad,
 
-          categoria: categoria.toUpperCase(),
+        estado,
 
-          cantidad,
+        imagen: urlImagen,
 
-          estado,
+      };
 
-          imagen: urlImagen,
+      /*
+       * Se pide el id de vuelta para confirmar que se afectó exactamente
+       * un registro: con RLS, una escritura no autorizada puede afectar
+       * 0 filas sin devolver error.
+       */
+      /*
+       * Control de concurrencia optimista: la actualización solo se
+       * aplica si el artículo conserva los valores con los que se abrió
+       * el formulario. Si otra persona lo modificó entretanto, se afecta
+       * 0 filas y no se sobrescriben sus cambios.
+       */
+      const { data: filas, error } = articulo
+        ? await condicionarAlOriginal(
+            supabase
+              .from("articulos")
+              .update(datos)
+              .eq("id", articulo.id),
+            articulo,
+          ).select("id")
+        : await supabase
+            .from("articulos")
+            .insert(datos)
+            .select("id");
 
-        }));
+      if (!error && articulo && filas && filas.length === 0) {
 
-    }
+        const { data: vigente } = await supabase
+          .from("articulos")
+          .select("id")
+          .eq("id", articulo.id)
+          .maybeSingle();
 
-    setGuardando(false);
+        if (vigente) {
 
-    if (error) {
+          if (fotoSubida) {
+            await eliminarFotoHuerfana(fotoSubida);
+            fotoSubida = null;
+          }
+
+          guardarBorrador(claveBorrador, {
+            codigo,
+            nombre,
+            categoria,
+            cantidad,
+            estado,
+          });
+
+          notificar.error(
+            "Otra persona modificó este artículo mientras usted lo editaba. Sus cambios no se guardaron para no sobrescribir los de ella; siguen en pantalla y se conservaron. Recargue la página para ver la versión actual y recuperar sus datos."
+          );
+
+          return;
+
+        }
+
+      }
+
+      if (error || !filas || filas.length !== 1) {
+
+        if (fotoSubida) {
+          await eliminarFotoHuerfana(fotoSubida);
+          fotoSubida = null;
+        }
+
+        notificar.error(
+          error?.code === "42501"
+            ? "No fue posible guardar: su sesión no tiene permisos para modificar artículos. Sus datos siguen en pantalla; cierre sesión, vuelva a iniciarla e intente de nuevo."
+            : error
+              ? error.message
+              : "No fue posible guardar el artículo. Verifique sus permisos e intente de nuevo."
+        );
+
+        return;
+
+      }
+
+      fotoSubida = null;
+
+    } catch (errorInesperado) {
+
+      if (fotoSubida) {
+        await eliminarFotoHuerfana(fotoSubida);
+      }
 
       notificar.error(
-        error.code === "42501"
-          ? "No fue posible guardar: su sesión no tiene permisos para modificar artículos. Cierre sesión, vuelva a iniciarla e intente de nuevo."
-          : error.message
+        errorInesperado instanceof Error
+          ? `No fue posible guardar el artículo: ${errorInesperado.message}`
+          : "No fue posible guardar el artículo."
       );
 
       return;
+
+    } finally {
+
+      setGuardando(false);
 
     }
 
@@ -261,6 +508,42 @@ export default function ArticuloForm({
           : "Nuevo artículo"}
 
       </h2>
+
+      {borrador && (
+
+        <div
+          role="status"
+          className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+
+          <p className="mb-3">
+            Hay datos capturados en un intento anterior que no se
+            guardaron (por ejemplo, porque la sesión expiró).
+          </p>
+
+          <div className="flex flex-wrap gap-3">
+
+            <button
+              type="button"
+              onClick={recuperarBorrador}
+              className="rounded-lg bg-amber-600 px-4 py-2 font-semibold text-white hover:bg-amber-700"
+            >
+              Recuperar datos
+            </button>
+
+            <button
+              type="button"
+              onClick={descartarBorrador}
+              className="rounded-lg border border-amber-400 px-4 py-2 font-semibold hover:bg-amber-100"
+            >
+              Descartar
+            </button>
+
+          </div>
+
+        </div>
+
+      )}
 
       <div className="grid grid-cols-2 gap-4">
 
