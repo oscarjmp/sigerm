@@ -32,6 +32,11 @@ type BorradorArticulo = {
 
 const PREFIJO_BORRADOR = "sigerm:borrador-articulo:";
 
+type FotoSubida = {
+  nombre: string;
+  url: string;
+};
+
 type FiltroIgualdad = {
   eq(columna: string, valor: string | number): FiltroIgualdad;
   is(columna: string, valor: null): FiltroIgualdad;
@@ -267,11 +272,33 @@ export default function ArticuloForm({
 
   }
 
-  async function eliminarFotoHuerfana(nombreArchivo: string) {
+  /*
+   * Retira la fotografía subida en ESTE intento (nombre único, subida sin
+   * sobrescribir: nunca es la imagen anterior del artículo) solo si se
+   * confirma que ningún artículo la referencia. Ante cualquier duda
+   * (p. ej. la red falló después de que la base de datos aplicara el
+   * cambio, o no se puede comprobar) se conserva: es preferible una
+   * fotografía huérfana a un artículo con la imagen rota.
+   */
+  async function eliminarFotoHuerfana(foto: FotoSubida) {
+
+    const { data: referencias, error: errorConsulta } =
+      await supabase
+        .from("articulos")
+        .select("id")
+        .eq("imagen", foto.url)
+        .limit(1);
+
+    if (errorConsulta || !referencias || referencias.length > 0) {
+      console.warn(
+        "[inventario] Se conserva la fotografía: está en uso o no se pudo comprobar.",
+      );
+      return;
+    }
 
     const { error } = await supabase.storage
       .from("articulos")
-      .remove([nombreArchivo]);
+      .remove([foto.nombre]);
 
     if (error) {
       console.error(
@@ -296,7 +323,7 @@ export default function ArticuloForm({
 
     setGuardando(true);
 
-    let fotoSubida: string | null = null;
+    let fotoSubida: FotoSubida | null = null;
 
     try {
 
@@ -352,12 +379,12 @@ export default function ArticuloForm({
 
         }
 
-        fotoSubida = nombreArchivo;
-
         urlImagen = supabase.storage
           .from("articulos")
           .getPublicUrl(nombreArchivo)
           .data.publicUrl;
+
+        fotoSubida = { nombre: nombreArchivo, url: urlImagen };
 
       }
 

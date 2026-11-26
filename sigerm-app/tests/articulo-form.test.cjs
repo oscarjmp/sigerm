@@ -32,7 +32,7 @@ beforeEach(() => {
 afterEach(() => { delete global.window; delete global.URL.createObjectURL; });
 
 // --- Dobles de Supabase -----------------------------------------------------
-function supabaseSimulado({ usuario = { id: "auth-admin" }, renovado = null, resultado = { data: [{ id: ARTICULO.id }], error: null }, errorSubida = null, vigente = null } = {}) {
+function supabaseSimulado({ usuario = { id: "auth-admin" }, renovado = null, resultado = { data: [{ id: ARTICULO.id }], error: null }, errorSubida = null, vigente = null, referencias = { data: [], error: null } } = {}) {
   const r = { escrituras: [], lecturas: [], subidas: [], retiradas: [], renovaciones: 0, getUser: 0 };
   const cliente = {
     auth: {
@@ -54,8 +54,13 @@ function supabaseSimulado({ usuario = { id: "auth-admin" }, renovado = null, res
         eq: (col, val) => { w.filtros.push(["eq", col, val]); return q; },
         is: (col, val) => { w.filtros.push(["is", col, val]); return q; },
         select: columnas => { w.select = columnas; w.op ??= "select"; return q; },
-        maybeSingle: async () => { r.lecturas.push(w); return { data: vigente, error: null }; },
+        limit: n => { w.limite = n; return q; },
+        maybeSingle: async () => { r.lecturas.push({ ...w, tipo: "vigente" }); return { data: vigente, error: null }; },
         then: (ok, ko) => {
+          if (w.op === "select") {
+            r.lecturas.push({ ...w, tipo: "referencias" });
+            return Promise.resolve(referencias).then(ok, ko);
+          }
           r.escrituras.push(w);
           return Promise.resolve().then(() => (typeof resultado === "function" ? resultado(w) : resultado)).then(ok, ko);
         },
@@ -245,7 +250,7 @@ test("CONCURRENCIA: si otra persona modificó el artículo no se sobrescribe y s
   v.elegirFoto("nueva.jpg");
   await v.guardar();
   assert.equal(r.escrituras.filter(w => w.op === "update").length, 1);
-  assert.equal(r.lecturas.length, 1, "se comprueba si el artículo sigue existiendo");
+  assert.equal(r.lecturas.filter(l => l.tipo === "vigente").length, 1, "se comprueba si el artículo sigue existiendo");
   const [tipo, mensaje] = v.avisos.at(-1);
   assert.equal(tipo, "error");
   assert.match(mensaje, /Otra persona modificó este artículo/);
@@ -278,6 +283,51 @@ test("si la red falla tras subir la foto, se retira y se informa sin bloquear el
   assert.equal(r.retiradas.length, 1);
   assert.match(v.avisos.at(-1)[1], /Failed to fetch/);
   assert.equal(v.boton("Guardando"), undefined);
+});
+
+test("FOTOS: antes de retirar una foto se comprueba que ningún artículo la referencia", async () => {
+  const { cliente, r } = supabaseSimulado({ resultado: { data: null, error: { code: "42501", message: "x" } } });
+  const v = montar({ supabase: cliente });
+  v.elegirFoto("nueva.jpg");
+  await v.guardar();
+  const [ref] = r.lecturas.filter(l => l.tipo === "referencias");
+  assert.ok(ref, "consulta de referencias realizada");
+  assert.deepEqual(ref.filtros, [["eq", "imagen", `https://ejemplo.invalid/articulos/${r.subidas[0].nombre}`]]);
+  assert.equal(r.retiradas.length, 1);
+});
+
+test("FOTOS: si la red falla DESPUÉS de que la base aplicó el cambio, la foto en uso NO se retira", async () => {
+  const { cliente, r } = supabaseSimulado({
+    resultado: () => { throw new Error("Failed to fetch"); },
+    referencias: { data: [{ id: ARTICULO.id }], error: null },
+  });
+  const v = montar({ supabase: cliente });
+  v.elegirFoto("nueva.jpg");
+  await v.guardar();
+  assert.deepEqual(r.retiradas, [], "la fotografía referenciada se conserva");
+  assert.equal(v.avisos.at(-1)[0], "error");
+});
+
+test("FOTOS: si no se puede comprobar si la foto está en uso, se conserva", async () => {
+  const { cliente, r } = supabaseSimulado({
+    resultado: { data: null, error: { code: "42501", message: "x" } },
+    referencias: { data: null, error: { message: "network" } },
+  });
+  const v = montar({ supabase: cliente });
+  v.elegirFoto("nueva.jpg");
+  await v.guardar();
+  assert.deepEqual(r.retiradas, []);
+});
+
+test("FOTOS: la imagen anterior del artículo nunca se retira", async () => {
+  const { cliente, r } = supabaseSimulado({ resultado: { data: null, error: { code: "42501", message: "x" } } });
+  const v = montar({ supabase: cliente });
+  v.elegirFoto("nueva.jpg");
+  await v.guardar();
+  for (const { nombres } of r.retiradas) assert.ok(!nombres.some(n => ARTICULO.imagen.endsWith(n)), "no se toca la imagen anterior");
+  const sinFoto = supabaseSimulado({ resultado: { data: null, error: { code: "42501", message: "x" } } });
+  await montar({ supabase: sinFoto.cliente }).guardar();
+  assert.deepEqual(sinFoto.r.retiradas, [], "sin foto nueva no se retira nada");
 });
 
 test("con éxito la fotografía nueva se conserva y se guarda su URL", async () => {
