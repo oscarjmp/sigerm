@@ -110,6 +110,37 @@ export default function ArticuloForm({
 
     setGuardando(true);
 
+    /*
+     * Antes de escribir se valida (y, si caducó, se renueva) la sesión
+     * del navegador contra Supabase Auth. Si no hay sesión válida, la
+     * petición viajaría como "anon", que no tiene privilegios sobre
+     * articulos ("permission denied for table articulos"). En ese caso
+     * se pide iniciar sesión de nuevo en lugar de intentar la escritura.
+     */
+    const {
+      data: { user: usuarioSesion },
+    } = await supabase.auth.getUser();
+
+    if (!usuarioSesion) {
+
+      setGuardando(false);
+
+      notificar.error(
+        "Su sesión expiró. Inicie sesión nuevamente para guardar los cambios."
+      );
+
+      router.push(
+        `/login?redirectTo=${encodeURIComponent(
+          articulo
+            ? `/inventario/editar/${articulo.id}`
+            : "/inventario"
+        )}`
+      );
+
+      return;
+
+    }
+
     let urlImagen = articulo?.imagen ?? "";
         if (imagen) {
 
@@ -187,7 +218,11 @@ export default function ArticuloForm({
 
     if (error) {
 
-      notificar.error(error.message);
+      notificar.error(
+        error.code === "42501"
+          ? "No fue posible guardar: su sesión no tiene permisos para modificar artículos. Cierre sesión, vuelva a iniciarla e intente de nuevo."
+          : error.message
+      );
 
       return;
 
