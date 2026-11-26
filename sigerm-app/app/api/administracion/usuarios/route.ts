@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { obtenerSupabaseAdmin } from "@/lib/supabase/admin";
+import { clienteAdministrativo } from "@/lib/supabase/adminRespuesta";
 
 type CrearUsuarioRequest = {
   nombre?: string;
@@ -150,6 +151,19 @@ export async function POST(request: Request) {
         },
       );
     }
+
+    /*
+     * El cliente administrativo se obtiene solo después de
+     * autorizar. Sin la clave administrativa (p. ej. Vercel
+     * Preview) la ruta responde 503 sin crear nada.
+     */
+    const administrativo = clienteAdministrativo();
+
+    if (administrativo.error) {
+      return administrativo.error;
+    }
+
+    const supabaseAdmin = administrativo.cliente;
 
     /*
      * 3. Leer y validar la información enviada.
@@ -377,9 +391,14 @@ export async function POST(request: Request) {
     /*
      * Limpieza adicional si ocurrió una excepción después de crear Auth.
      */
+    /*
+     * authIdCreado solo existe si ya se obtuvo el cliente
+     * administrativo, por lo que aquí se reutiliza la misma
+     * instancia ya creada.
+     */
     if (authIdCreado) {
       try {
-        await supabaseAdmin.auth.admin.deleteUser(authIdCreado);
+        await obtenerSupabaseAdmin().auth.admin.deleteUser(authIdCreado);
       } catch (rollbackError) {
         console.error(
           "No fue posible revertir el usuario de Auth:",

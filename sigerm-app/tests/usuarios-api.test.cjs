@@ -28,8 +28,7 @@ function escenario({ usuarioObjetivo, administradoresActivos = 2 }) {
       from: () => consulta(() => ({ data: perfilSesion, error: null }), []),
     }),
   };
-  const admin = {
-    supabaseAdmin: {
+  const clienteAdmin = {
       from(tabla) {
         const registro = [];
         return consulta(r => {
@@ -43,8 +42,8 @@ function escenario({ usuarioObjetivo, administradoresActivos = 2 }) {
         }, registro);
       },
       auth: { admin: { deleteUser: async authId => { authEliminados.push(authId); return { error: null }; } } },
-    },
   };
+  const admin = { AdministracionNoDisponibleError: class extends Error {}, obtenerSupabaseAdmin: () => clienteAdmin };
   const nextServer = { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } };
   const cargar = crearLoader({ "next/server": nextServer, "@/lib/supabase/server": servidor, "@/lib/supabase/admin": admin });
   const ruta = cargar("app/api/administracion/usuarios/[id]/route.ts");
@@ -81,6 +80,95 @@ test("DELETE conserva al último administrador activo", async () => {
   assert.deepEqual(escrituras, []);
   assert.deepEqual(authEliminados, []);
 });
+
+// --- Entorno sin SUPABASE_SERVICE_ROLE_KEY (Vercel Preview) -------------
+// Se usa el módulo real lib/supabase/admin.ts; solo se simulan la sesión
+// y next/server. Ninguna prueba crea clientes con red.
+
+const VARIABLES = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"];
+function conEntorno(valores, fn) {
+  const previo = Object.fromEntries(VARIABLES.map(v => [v, process.env[v]]));
+  for (const v of VARIABLES) { if (valores[v] === undefined) delete process.env[v]; else process.env[v] = valores[v]; }
+  const restaurar = () => { for (const v of VARIABLES) { if (previo[v] === undefined) delete process.env[v]; else process.env[v] = previo[v]; } };
+  return Promise.resolve().then(fn).finally(restaurar);
+}
+
+function sinClave({ sesion = true, rol = "Administrador" } = {}) {
+  const perfil = { id: ADMIN_ID, auth_id: "auth-admin", activo: true, roles: { id: "rol", nombre: rol } };
+  const servidor = {
+    createClient: async () => ({
+      auth: { getUser: async () => ({ data: { user: sesion ? { id: "auth-admin" } : null }, error: sesion ? null : { message: "sin sesión" } }) },
+      from: () => consulta(() => ({ data: perfil, error: null }), []),
+    }),
+  };
+  const nextServer = { NextResponse: { json: (body, init) => ({ body, status: init?.status ?? 200 }) } };
+  const cargar = crearLoader({ "next/server": nextServer, "@/lib/supabase/server": servidor });
+  return {
+    individual: cargar("app/api/administracion/usuarios/[id]/route.ts"),
+    coleccion: cargar("app/api/administracion/usuarios/route.ts"),
+    admin: cargar("lib/supabase/admin.ts"),
+  };
+}
+const contexto = { params: Promise.resolve({ id: OTRO_ADMIN_ID }) };
+const peticion = cuerpo => ({ json: async () => cuerpo });
+
+test("importar las rutas y el cliente administrativo no exige la clave (build de Preview)", () =>
+  conEntorno({ NEXT_PUBLIC_SUPABASE_URL: "https://ejemplo.invalid" }, () => {
+    const { individual, coleccion, admin } = sinClave();
+    assert.equal(typeof individual.DELETE, "function");
+    assert.equal(typeof individual.PUT, "function");
+    assert.equal(typeof coleccion.POST, "function");
+    assert.throws(() => admin.obtenerSupabaseAdmin(), admin.AdministracionNoDisponibleError);
+  }));
+
+test("sin la clave, un Administrador autorizado recibe 503 en POST, PUT y DELETE", () =>
+  conEntorno({ NEXT_PUBLIC_SUPABASE_URL: "https://ejemplo.invalid" }, async () => {
+    const { individual, coleccion } = sinClave();
+    const respuestas = [
+      await individual.DELETE({}, contexto),
+      await individual.PUT(peticion({ nombre: "Ana", rol_id: "rol" }), contexto),
+      await coleccion.POST(peticion({ nombre: "Ana", email: "ana@ejemplo.invalid", password: "x", rol_id: "rol" })),
+    ];
+    for (const r of respuestas) {
+      assert.equal(r.status, 503);
+      assert.equal(r.body.error, "La administración de usuarios no está disponible en este entorno.");
+      assert.doesNotMatch(JSON.stringify(r.body), /SERVICE_ROLE|\.env/);
+    }
+  }));
+
+test("sin la clave se conserva la autorización: sin sesión 401 y sin rol Administrador 403", () =>
+  conEntorno({ NEXT_PUBLIC_SUPABASE_URL: "https://ejemplo.invalid" }, async () => {
+    const anonimo = sinClave({ sesion: false });
+    assert.equal((await anonimo.individual.DELETE({}, contexto)).status, 401);
+    assert.equal((await anonimo.individual.PUT(peticion({}), contexto)).status, 401);
+    assert.equal((await anonimo.coleccion.POST(peticion({}))).status, 401);
+    const coordinador = sinClave({ rol: "Coordinador" });
+    assert.equal((await coordinador.individual.DELETE({}, contexto)).status, 403);
+    assert.equal((await coordinador.individual.PUT(peticion({}), contexto)).status, 403);
+    assert.equal((await coordinador.coleccion.POST(peticion({}))).status, 403);
+  }));
+
+test("sin URL de Supabase tampoco se crea el cliente administrativo", () =>
+  conEntorno({ SUPABASE_SERVICE_ROLE_KEY: "clave-ficticia" }, () => {
+    const { admin } = sinClave();
+    assert.throws(() => admin.obtenerSupabaseAdmin(), admin.AdministracionNoDisponibleError);
+  }));
+
+test("con URL y clave el cliente se crea una sola vez y se reutiliza", () =>
+  conEntorno({ NEXT_PUBLIC_SUPABASE_URL: "https://ejemplo.invalid", SUPABASE_SERVICE_ROLE_KEY: "clave-ficticia" }, () => {
+    const { admin } = sinClave();
+    const a = admin.obtenerSupabaseAdmin();
+    assert.equal(typeof a.from, "function");
+    assert.equal(admin.obtenerSupabaseAdmin(), a);
+  }));
+
+test("el cliente administrativo se niega a crearse en un navegador", () =>
+  conEntorno({ NEXT_PUBLIC_SUPABASE_URL: "https://ejemplo.invalid", SUPABASE_SERVICE_ROLE_KEY: "clave-ficticia" }, () => {
+    const { admin } = sinClave();
+    global.window = {};
+    try { assert.throws(() => admin.obtenerSupabaseAdmin(), /solo puede usarse en el servidor/); }
+    finally { delete global.window; }
+  }));
 
 test("DELETE responde 404 sin escribir cuando el usuario no existe", async () => {
   const { ruta, escrituras, authEliminados } = escenario({ usuarioObjetivo: null });

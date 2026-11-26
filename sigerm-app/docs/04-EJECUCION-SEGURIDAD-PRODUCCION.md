@@ -100,9 +100,10 @@ escrituras directas); solo deben usarse ante un fallo que lo justifique.
 
 Rama `release/integracion-macro1`, creada desde `40dd555`:
 
-- 178 pruebas aprobadas, 0 fallidas: las 174 integradas más 4 de
-  regresión de `DELETE /api/administracion/usuarios/[id]`
-  (`tests/usuarios-api.test.cjs`, con dobles en memoria, sin red ni SQL).
+- 184 pruebas aprobadas, 0 fallidas: las 174 integradas más 10 de
+  `tests/usuarios-api.test.cjs` (4 de la protección de la propia cuenta en
+  DELETE y 6 del funcionamiento sin clave administrativa), con dobles en
+  memoria, sin red ni SQL.
 - TypeScript, ESLint y build aislado aprobados.
 
 ```powershell
@@ -113,7 +114,37 @@ node scripts/build-isolated.cjs
 ```
 
 `npm test` ejecuta todos los archivos `tests/*.test.cjs`. El comando de
-`03-CONTRATOS-OPERACION.md` omite `integracion.test.cjs` y ejecuta 144.
+`03-CONTRATOS-OPERACION.md` omite `integracion.test.cjs` y
+`usuarios-api.test.cjs`, por lo que solo ejecuta 144.
+
+## Entornos sin clave administrativa (Vercel Preview)
+
+`SUPABASE_SERVICE_ROLE_KEY` solo está configurada en el entorno
+Production de Vercel y no debe habilitarse en Preview. Desde
+`lib/supabase/admin.ts` v2 el cliente administrativo se crea de forma
+diferida (`obtenerSupabaseAdmin()`), solo en el servidor, y nunca al
+importar el módulo. El build ya no depende de la clave.
+
+Sin la clave:
+
+| Función | Ruta | Comportamiento |
+|---|---|---|
+| Crear usuario | `POST /api/administracion/usuarios` | 503 «La administración de usuarios no está disponible en este entorno.» |
+| Editar usuario, rol o estado | `PUT /api/administracion/usuarios/[id]` | 503, sin modificar nada |
+| Eliminar usuario | `DELETE /api/administracion/usuarios/[id]` | 503, sin inactivar ni borrar |
+
+- La autorización se evalúa antes de pedir el cliente. Sin sesión, la
+  respuesta sigue siendo 401, y para un rol distinto de Administrador, 403.
+- No hay clave alternativa ni degradación de controles: sin la clave no
+  existe cliente administrativo.
+- Todo lo demás funciona igual en Preview, porque usa la clave pública y
+  RLS: inicio de sesión, menús por rol, consulta de usuarios, inventario,
+  préstamos, Kardex, matrimonios y módulos de operación. Si Preview apunta
+  a la base de datos de producción, sus escrituras son reales: en Preview
+  solo deben hacerse pruebas de lectura.
+- `scripts/build-isolated.cjs` ya no define la clave, para reproducir las
+  condiciones de Preview. El build anterior la definía con un valor
+  ficticio y por eso no detectó el fallo.
 
 ## Pendientes
 

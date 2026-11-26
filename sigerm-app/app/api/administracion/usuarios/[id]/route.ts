@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { clienteAdministrativo } from "@/lib/supabase/adminRespuesta";
 
 type RouteContext = {
   params: Promise<{
@@ -220,6 +220,19 @@ export async function PUT(
         },
       );
     }
+
+    /*
+     * El cliente administrativo se obtiene solo después de
+     * autorizar. Sin la clave administrativa (p. ej. Vercel
+     * Preview) la ruta responde 503 sin modificar nada.
+     */
+    const administrativo = clienteAdministrativo();
+
+    if (administrativo.error) {
+      return administrativo.error;
+    }
+
+    const supabaseAdmin = administrativo.cliente;
 
     let datos: ActualizarUsuarioRequest;
 
@@ -548,6 +561,19 @@ export async function DELETE(
         },
       );
     }
+
+    /*
+     * El cliente administrativo se obtiene solo después de
+     * autorizar. Sin la clave administrativa (p. ej. Vercel
+     * Preview) la ruta responde 503 sin modificar nada.
+     */
+    const administrativo = clienteAdministrativo();
+
+    if (administrativo.error) {
+      return administrativo.error;
+    }
+
+    const supabaseAdmin = administrativo.cliente;
 
     if (perfilAdministrador.id === id) {
       return NextResponse.json(
